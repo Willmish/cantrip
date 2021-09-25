@@ -20,6 +20,13 @@ includeGlobalComponents()
 include(${CMAKE_CURRENT_LIST_DIR}/rust.cmake)
 
 RustAddLibrary(
+  kata_os_common
+  SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/components/kata-os-common
+  TARGET "riscv32imc-unknown-none-elf"
+  LIB_FILENAME libkata_os_common.a
+)
+
+RustAddLibrary(
   kata_debug_console
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/components/DebugConsole
   TARGET "riscv32imc-unknown-none-elf"

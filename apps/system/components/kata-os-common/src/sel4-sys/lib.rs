@@ -9,26 +9,21 @@
  */
 #![no_std]
 #![feature(asm)]
-
 #![allow(bad_style, unused_parens, unused_assignments)]
-#![doc(html_root_url = "https://doc.robigalia.org/")]
 
 #[cfg(not(any(
     all(target_arch = "arm", target_pointer_width = "32"),
+    all(target_arch = "riscv32"),
     all(target_arch = "x86"),
     all(target_arch = "x86_64"),
- )))]
+)))]
 use architecture_not_supported_sorry;
 
-
-extern crate rlibc;
-extern crate bitflags;
-
+pub use seL4_BreakpointAccess::*;
+pub use seL4_BreakpointType::*;
 pub use seL4_Error::*;
 pub use seL4_LookupFailureType::*;
 pub use seL4_ObjectType::*;
-pub use seL4_BreakpointType::*;
-pub use seL4_BreakpointAccess::*;
 
 use core::mem::size_of;
 
@@ -74,7 +69,7 @@ macro_rules! error_types {
             seL4_SingleStep,
             seL4_SoftwareBreakRequest,
         }
-        
+
         #[repr($int_width)]
         #[derive(Debug, Copy, Clone, PartialEq, Eq)]
         pub enum seL4_BreakpointAccess {
@@ -82,9 +77,8 @@ macro_rules! error_types {
             seL4_BreakOnWrite,
             seL4_BreakOnReadWrite,
         }
-    }
+    };
 }
-
 
 pub type seL4_Word = usize;
 pub type seL4_CPtr = usize;
@@ -98,6 +92,9 @@ include!("arch/x86_64.rs");
 #[cfg(all(target_arch = "arm", target_pointer_width = "32"))]
 include!("arch/arm.rs");
 
+#[cfg(target_arch = "riscv32")]
+include!("arch/riscv.rs");
+
 #[cfg(all(target_arch = "x86"))]
 include!(concat!(env!("OUT_DIR"), "/ia32_invocation.rs"));
 
@@ -106,6 +103,9 @@ include!(concat!(env!("OUT_DIR"), "/x86_64_invocation.rs"));
 
 #[cfg(all(target_arch = "arm", target_pointer_width = "32"))]
 include!(concat!(env!("OUT_DIR"), "/aarch32_invocation.rs"));
+
+#[cfg(target_arch = "riscv32")]
+include!(concat!(env!("OUT_DIR"), "/riscv32_invocation.rs"));
 
 #[cfg(all(target_arch = "x86"))]
 include!(concat!(env!("OUT_DIR"), "/ia32_syscall_stub.rs"));
@@ -116,6 +116,9 @@ include!(concat!(env!("OUT_DIR"), "/x86_64_syscall_stub.rs"));
 #[cfg(all(target_arch = "arm", target_pointer_width = "32"))]
 include!(concat!(env!("OUT_DIR"), "/aarch32_syscall_stub.rs"));
 
+#[cfg(target_arch = "riscv32")]
+include!(concat!(env!("OUT_DIR"), "/riscv32_syscall_stub.rs"));
+
 #[cfg(target_pointer_width = "32")]
 include!(concat!(env!("OUT_DIR"), "/types32.rs"));
 
@@ -124,12 +127,23 @@ include!(concat!(env!("OUT_DIR"), "/types64.rs"));
 
 include!(concat!(env!("OUT_DIR"), "/syscalls.rs"));
 
+// Well-known types from libsel4/include/sel4/types.h
+
+pub type seL4_NodeId = seL4_Word;
+pub type seL4_PAddr = seL4_Word;
+pub type seL4_Domain = seL4_Word;
+
 pub type seL4_CNode = seL4_CPtr;
 pub type seL4_IRQHandler = seL4_CPtr;
 pub type seL4_IRQControl = seL4_CPtr;
 pub type seL4_TCB = seL4_CPtr;
 pub type seL4_Untyped = seL4_CPtr;
 pub type seL4_DomainSet = seL4_CPtr;
+pub type seL4_SchedContext = seL4_CPtr;
+pub type seL4_SchedControl = seL4_CPtr;
+
+// TODO(sleffler): seL4 uses seL4_Uint64 but it's not defined for us
+pub type seL4_Time = u64;
 
 pub const seL4_MsgLengthBits: usize = 7;
 pub const seL4_MsgMaxLength: usize = 120;
@@ -170,27 +184,27 @@ impl ::core::clone::Clone for seL4_IPCBuffer {
 
 /* bootinfo */
 
-pub static seL4_CapNull: seL4_Word          = 0; /* null cap */
+pub static seL4_CapNull: seL4_Word = 0; /* null cap */
 pub static seL4_CapInitThreadTCB: seL4_Word = 1; /* initial thread's TCB cap */
-pub static seL4_CapInitThreadCNode: seL4_Word     = 2; /* initial thread's root CNode cap */
-pub static seL4_CapInitThreadVSpace: seL4_Word    = 3; /* initial thread's VSpace cap */
-pub static seL4_CapIRQControl: seL4_Word    = 4; /* global IRQ controller cap */
-pub static seL4_CapASIDControl: seL4_Word   = 5; /* global ASID controller cap */
-pub static seL4_CapInitThreadASIDPool: seL4_Word  = 6; /* initial thread's ASID pool cap */
-pub static seL4_CapIOPort: seL4_Word        = 7; /* global IO port cap (null cap if not supported) */
-pub static seL4_CapIOSpace: seL4_Word       = 8; /* global IO space cap (null cap if no IOMMU support) */
+pub static seL4_CapInitThreadCNode: seL4_Word = 2; /* initial thread's root CNode cap */
+pub static seL4_CapInitThreadVSpace: seL4_Word = 3; /* initial thread's VSpace cap */
+pub static seL4_CapIRQControl: seL4_Word = 4; /* global IRQ controller cap */
+pub static seL4_CapASIDControl: seL4_Word = 5; /* global ASID controller cap */
+pub static seL4_CapInitThreadASIDPool: seL4_Word = 6; /* initial thread's ASID pool cap */
+pub static seL4_CapIOPort: seL4_Word = 7; /* global IO port cap (null cap if not supported) */
+pub static seL4_CapIOSpace: seL4_Word = 8; /* global IO space cap (null cap if no IOMMU support) */
 pub static seL4_CapBootInfoFrame: seL4_Word = 9; /* bootinfo frame cap */
 pub static seL4_CapInitThreadIPCBuffer: seL4_Word = 10; /* initial thread's IPC buffer frame cap */
-pub static seL4_CapDomain: seL4_Word        = 11;  /* global domain controller cap */
+pub static seL4_CapDomain: seL4_Word = 11; /* global domain controller cap */
 
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// A half-open [start..end) range of slots
 pub struct seL4_SlotRegion {
     /// First CNode slot position of the region
-    pub start: seL4_Word, 
+    pub start: seL4_Word,
     /// First CNode slot position after the region
-    pub end: seL4_Word,   /* first CNode slot position AFTER region */
+    pub end: seL4_Word, /* first CNode slot position AFTER region */
 }
 
 #[repr(C, packed)]
@@ -209,18 +223,19 @@ pub struct seL4_UntypedDesc {
 // explicitly *not* Copy. the array at the end is tricky to handle.
 
 #[repr(C, packed)]
-#[derive(Debug, PartialEq, Eq)]
-pub struct seL4_BootInfo {           
+// #[derive]` can't be used on a `#[repr(packed)]` struct that does not derive Copy (error E0133)
+//#[derive(Debug, PartialEq, Eq)]
+pub struct seL4_BootInfo {
     /// Length of any additional bootinfo information
     pub extraLen: seL4_Word,
     /// ID [0..numNodes-1] of the current node (0 if uniprocessor)
-    pub nodeID: seL4_Word,          
+    pub nodeID: seL4_Word,
     /// Number of seL4 nodes (1 if uniprocessor)
     pub numNodes: seL4_Word,
     /// Number of IOMMU PT levels (0 if no IOMMU support)
-    pub numIOPTLevels: seL4_Word,   
+    pub numIOPTLevels: seL4_Word,
     /// pointer to root task's IPC buffer */
-    pub ipcBuffer: *mut seL4_IPCBuffer,      
+    pub ipcBuffer: *mut seL4_IPCBuffer,
     /// Empty slots (null caps)
     pub empty: seL4_SlotRegion,
     /// Frames shared between nodes
@@ -237,12 +252,15 @@ pub struct seL4_BootInfo {
     pub initThreadCNodeSizeBits: u8,
     /// Root task's domain ID
     pub initThreadDomain: u32,
-    /// TSC frequency on x86, unused on ARM.
-    pub archInfo: seL4_Word,
+
+    #[cfg(feature = "SEL4_CONFIG_KERNEL_MCS")]
+    // Caps to sched_control for each node
+    pub schedcontrol: seL4_SlotRegion,
+
     /// Untyped object caps
     pub untyped: seL4_SlotRegion,
     /// Information about each untyped cap
-    /// 
+    ///
     /// *Note*! This is actually an array! The actual length depends on kernel configuration which
     /// we have no way of knowing at this point. Use the `untyped_descs` method.
     pub untypedList: seL4_UntypedDesc,
@@ -262,8 +280,10 @@ impl seL4_BootInfo {
     pub unsafe fn untyped_descs(&self) -> &[seL4_UntypedDesc] {
         let len = self.untyped.end - self.untyped.start;
         // sanity check that the number of untypeds doesn't extend past the end of the page
-        debug_assert!(len <= (4096 - size_of::<seL4_BootInfo>() + size_of::<seL4_UntypedDesc>()) /  size_of::<seL4_UntypedDesc>()) ;
+        debug_assert!(
+            len <= (4096 - size_of::<seL4_BootInfo>() + size_of::<seL4_UntypedDesc>())
+                / size_of::<seL4_UntypedDesc>()
+        );
         core::slice::from_raw_parts(&self.untypedList, len)
     }
 }
-

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright 2015, Corey Richardson
 # Copyright 2014, NICTA
@@ -17,6 +17,7 @@ from __future__ import division, print_function
 import argparse
 import re
 import sys
+# install tempita using pip install tempita
 # install tempita using sudo apt-get install python-tempita or similar for your distro
 import tempita
 import xml.dom.minidom
@@ -51,6 +52,8 @@ def parse_args():
                                                     and associated header files""")
     parser.add_argument('--xml', type=argparse.FileType('r'),
             help='Name of xml file with syscall name definitions', required=True)
+    parser.add_argument('--mcs', action='store_true',
+                        help='Generate MCS api')
     parser.add_argument('--dest', type=argparse.FileType('w'),
             help='Name of file to generate for librustsel4', required=True)
 
@@ -75,7 +78,7 @@ def parse_syscall_list(element):
     return syscalls
 
 
-def parse_xml(xml_file):
+def parse_xml(xml_file, mcs):
     # first check if the file is valid xml
     try:
         doc = xml.dom.minidom.parse(xml_file)
@@ -83,10 +86,11 @@ def parse_xml(xml_file):
         print("Error: invalid xml file.", file=sys.stderr)
         sys.exit(-1)
 
-    api = doc.getElementsByTagName("api")
+    tag = "api-mcs" if mcs else "api-master"
+    api = doc.getElementsByTagName(tag)
     if len(api) != 1:
         print("Error: malformed xml. Only one api element allowed",
-                file=sys.stderr)
+              file=sys.stderr)
         sys.exit(-1)
 
     configs = api[0].getElementsByTagName("config")
@@ -120,7 +124,7 @@ def generate_libsel4_file(libsel4_header, syscalls):
 if __name__ == "__main__":
     args = parse_args()
 
-    (api, debug) = parse_xml(args.xml)
+    (api, debug) = parse_xml(args.xml, args.mcs)
     args.xml.close()
 
     generate_libsel4_file(args.dest, api + debug)

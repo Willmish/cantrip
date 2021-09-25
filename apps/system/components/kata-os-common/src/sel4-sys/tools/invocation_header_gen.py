@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright 2015, Corey Richardson
 # Copyright 2014, NICTA
@@ -33,7 +33,11 @@ INVOCATION_TEMPLATE = COMMON_HEADER + """
 #[repr(C)]
 pub enum InvocationLabel {
     InvalidInvocation = 0,
-    {{for loop, label in looper(invocations)}}
+    {{for loop, list in looper(invocations)}}
+      {{py:label, condition = list}}
+    {{if condition}}
+    #[cfg({{condition}})]
+    {{endif}}
     {{label}} = {{loop.index+1}},
     {{endfor}}
 }
@@ -57,7 +61,24 @@ def parse_xml(xml_file):
 
     invocation_labels = []
     for method in doc.getElementsByTagName("method"):
-        invocation_labels.append(str(method.getAttribute("id")))
+        condition = method.getAttribute("condition")
+        # HACK: ugly hacks to handle simple CPP expressions (very fragile)
+        if condition == "(!defined CONFIG_KERNEL_MCS) && CONFIG_MAX_NUM_NODES > 1":
+            # NB: CONFIG_MAX_NUM_NODES > 1 =>'s CONFIG_SMP_SUPPORT
+            condition = 'all(not(feature = "CONFIG_KERNEL_MCS"), feature = "CONFIG_SMP_SUPPORT")'
+        elif condition == "CONFIG_MAX_NUM_NODES > 1":
+            condition = 'feature = "CONFIG_SMP_SUPPORT"'
+        elif condition:
+            condition = condition.replace('defined', '')
+            condition = condition.replace('(', '')
+            condition = condition.replace(')', '')
+            if 'CONFIG_' in condition:
+                condition = 'feature = "' + condition + '"'
+            if '!' in condition:
+                condition = 'not(%s)' % condition.replace('!', '')
+
+        invocation_labels.append((str(method.getAttribute("id")),
+                                  str(condition)))
 
     return invocation_labels
 
