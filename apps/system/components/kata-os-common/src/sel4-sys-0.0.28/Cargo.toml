@@ -1,0 +1,34 @@
+# Copyright (c) 2015 The Robigalia Project Developers
+# Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+# http://www.apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT
+# or http://opensource.org/licenses/MIT>, at your option. All files in the
+# project carrying such notice may not be copied, modified, or distributed
+# except according to those terms.
+[package]
+name = "sel4-sys"
+version = "0.0.28"
+authors = ["Corey Richardson <corey@octayn.net>"]
+description = "Rust interface to the seL4 kernel"
+documentation = "https://doc.robigalia.org/sel4_sys"
+repository = "https://gitlab.com/robigalia/sel4-sys"
+readme = "README.md"
+license = "MIT/Apache-2.0"
+build = "build.rs"
+
+[features]
+unstable = []
+SEL4_DANGEROUS_CODE_INJECTION = []
+SEL4_CONFIG_BENCHMARK = []
+CONFIG_HARDWARE_DEBUG_API = []
+# note: if you're looking at these, be aware that hypervisor support is not
+# yet available at all. these features shouldn't be enabled.
+CONFIG_VTX = []
+CONFIG_ARM_SMMU = []
+CONFIG_ARM_HYPERVISOR_SUPPORT = []
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+rlibc = "1.0.0"
+bitflags = "0.7.0"
