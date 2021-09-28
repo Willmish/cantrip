@@ -11,6 +11,7 @@
 #![feature(asm)]
 #![allow(bad_style, unused_parens, unused_assignments)]
 
+// NB: this mimics the logic in build.rs
 #[cfg(not(any(
     all(target_arch = "arm", target_pointer_width = "32"),
     all(target_arch = "riscv32"),

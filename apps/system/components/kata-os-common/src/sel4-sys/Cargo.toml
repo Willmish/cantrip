@@ -15,14 +15,16 @@ readme = "README.md"
 license = "MIT/Apache-2.0"
 build = "build.rs"
 
+# NB: used by build.rs
 [env]
+# Pathname to seL4 kernel for xml files and (eventually) tools scripts,
+# defaults to "sel4"
 SEL4_DIR = "sel4"
-SEL4_ARCHES = "riscv32"
+# Name of python3 interpreter executable, defaults to "python3"
 PYTHON = "python3"
 
 [features]
-default = []  # XXX should come from kernel
-#default = ["CONFIG_KERNEL_MCS", "CONFIG_SET_TLS_BASE_SELF"]
+default = ["CONFIG_KERNEL_MCS", "CONFIG_SET_TLS_BASE_SELF"]
 # Changes api, blech
 CONFIG_KERNEL_MCS = []
 CONFIG_DANGEROUS_CODE_INJECTION = []
