@@ -841,6 +841,7 @@ pub unsafe fn seL4_NBWait(src: seL4_CPtr, sender: *mut seL4_Word) -> seL4_Messag
     seL4_MessageInfo { words: [info] }
 }
 
+#[cfg(feature = "CONFIG_PRINTING")]
 #[inline(always)]
 pub unsafe fn seL4_DebugPutChar(c: u8) {
     asm!("ecall",
@@ -850,6 +851,7 @@ pub unsafe fn seL4_DebugPutChar(c: u8) {
     );
 }
 
+#[cfg(feature = "CONFIG_PRINTING")]
 #[inline(always)]
 pub unsafe fn seL4_DebugDumpScheduler() {
     asm!("ecall",
@@ -858,6 +860,7 @@ pub unsafe fn seL4_DebugDumpScheduler() {
     );
 }
 
+#[cfg(feature = "CONFIG_DEBUG_BUILD")]
 #[inline(always)]
 pub unsafe fn seL4_DebugHalt() {
     asm!("ecall",
@@ -866,6 +869,7 @@ pub unsafe fn seL4_DebugHalt() {
     );
 }
 
+#[cfg(feature = "CONFIG_DEBUG_BUILD")]
 #[inline(always)]
 pub unsafe fn seL4_DebugSnapshot() {
     asm!("ecall",
@@ -874,6 +878,7 @@ pub unsafe fn seL4_DebugSnapshot() {
     );
 }
 
+#[cfg(feature = "CONFIG_DEBUG_BUILD")]
 #[inline(always)]
 pub unsafe fn seL4_DebugCapIdentify(mut cap: seL4_CPtr) -> u32 {
     asm!("ecall",
@@ -885,6 +890,7 @@ pub unsafe fn seL4_DebugCapIdentify(mut cap: seL4_CPtr) -> u32 {
 }
 
 // Note: name MUST be NUL-terminated.
+#[cfg(feature = "CONFIG_DEBUG_BUILD")]
 #[inline(always)]
 pub unsafe fn seL4_DebugNameThread(tcb: seL4_CPtr, name: &[u8]) {
     core::ptr::copy_nonoverlapping(
@@ -898,6 +904,7 @@ pub unsafe fn seL4_DebugNameThread(tcb: seL4_CPtr, name: &[u8]) {
     );
 }
 
+#[cfg(feature = "CONFIG_DANGEROUS_CODE_INJECTION")]
 #[inline(always)]
 pub unsafe fn seL4_DebugRun(userfn: extern "C" fn(*mut u8), userarg: *mut u8) {
     let userfnptr = userfn as *mut ();
@@ -908,6 +915,7 @@ pub unsafe fn seL4_DebugRun(userfn: extern "C" fn(*mut u8), userarg: *mut u8) {
     );
 }
 
+#[cfg(feature = "CONFIG_ENABLE_BENCHMARKS")]
 #[inline(always)]
 pub unsafe fn seL4_BenchmarkResetLog() {
     asm!("ecall",
@@ -916,6 +924,7 @@ pub unsafe fn seL4_BenchmarkResetLog() {
     );
 }
 
+#[cfg(feature = "CONFIG_ENABLE_BENCHMARKS")]
 #[inline(always)]
 pub unsafe fn seL4_BenchmarkFinalizeLog() {
     asm!("ecall",
@@ -929,6 +938,7 @@ pub unsafe fn seL4_BenchmarkFinalizeLog() {
 // TODO(sleffler): seL4_BenchmarkFlushCaches
 // TODO(sleffler): seL4_BenchmarkFlushL1Caches
 
+#[cfg(feature = "CONFIG_SET_TLS_BASE_SELF")]
 pub unsafe fn seL4_SetTLSBase(tls_base: seL4_Word) {
     let info: seL4_Word = 0; // XXX does this dtrt?
     asm!("ecall",

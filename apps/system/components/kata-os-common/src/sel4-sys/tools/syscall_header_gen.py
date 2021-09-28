@@ -35,10 +35,10 @@ libsel4_header_template = \
 #[repr(isize)]
 pub enum SyscallId {
 {{py:syscall_number = -1}}
-{{for config, list in enum}}
+{{for name, condition, list in enum}}
     {{for syscall in list}}
-    {{if len(config) > 0}}
-    #[cfg(feature = "SEL4_{{config}}")]
+    {{if len(condition) > 0}}
+    #[cfg({{condition}})]
     {{endif}}
     {{syscall}} = {{syscall_number}},
     {{py:syscall_number -= 1}}
@@ -64,13 +64,30 @@ def parse_args():
 def parse_syscall_list(element):
     syscalls = []
     for config in element.getElementsByTagName("config"):
-        config_condition = config.getAttribute("condition")
+        condition = config.getAttribute("condition")
+        # HACK: ugly hacks to handle simple CPP expressions (very fragile)
+        # NB: CONFIG_MAX_NUM_NODES > 1 =>'s CONFIG_SMP_SUPPORT
+        condition = condition.replace('CONFIG_MAX_NUM_NODES > 1', 'CONFIG_SMP_SUPPORT')
+        if condition == "defined CONFIG_DEBUG_BUILD && CONFIG_SMP_SUPPORT":
+            condition = 'all(feature = "CONFIG_DEBUG_BUILD", feature = "CONFIG_SMP_SUPPORT")'
+        elif condition == "defined CONFIG_DEBUG_BUILD && defined CONFIG_BENCHMARK_TRACK_UTILISATION":
+            condition = 'all(feature = "CONFIG_DEBUG_BUILD", feature = "CONFIG_BENCHMARK_TRACK_UTILISATION")'
+        elif condition:
+            condition = condition.replace('defined', '')
+            condition = condition.replace('(', '')
+            condition = condition.replace(')', '')
+            condition = condition.replace(' ', '')
+            if 'CONFIG_' in condition:
+                condition = 'feature = "' + condition + '"'
+            if '!' in condition:
+                condition = 'not(%s)' % condition.replace('!', '')
+
         config_name = config.getAttribute("name")
         config_syscalls = []
         for syscall in config.getElementsByTagName("syscall"):
             name = str(syscall.getAttribute("name"))
             config_syscalls.append(name)
-        syscalls.append((config_name, config_syscalls))
+        syscalls.append((config_name, condition, config_syscalls))
 
     # sanity check
     assert len(syscalls) != 0
