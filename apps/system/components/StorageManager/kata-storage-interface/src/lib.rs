@@ -106,6 +106,16 @@ impl From<cstr_core::NulError> for StorageManagerError {
     }
 }
 
+impl From<StorageManagerError> for Result<(), StorageManagerError> {
+    fn from(err: StorageManagerError) -> Result<(), StorageManagerError> {
+        if err == StorageManagerError::SmeSuccess {
+            Ok(())
+        } else {
+            Err(err)
+        }
+    }
+}
+
 #[inline]
 #[allow(dead_code)]
 pub fn kata_storage_delete(key: &str) -> Result<(), StorageManagerError> {
@@ -114,10 +124,7 @@ pub fn kata_storage_delete(key: &str) -> Result<(), StorageManagerError> {
         pub fn storage_delete(c_key: *const cstr_core::c_char) -> StorageManagerError;
     }
     let cstr = CString::new(key)?;
-    match unsafe { storage_delete(cstr.as_ptr()) } {
-        StorageManagerError::SmeSuccess => Ok(()),
-        status => Err(status),
-    }
+    unsafe { storage_delete(cstr.as_ptr()) }.into()
 }
 
 #[inline]
@@ -148,8 +155,5 @@ pub fn kata_storage_write(key: &str, value: &[u8]) -> Result<(), StorageManagerE
         ) -> StorageManagerError;
     }
     let cstr = CString::new(key)?;
-    match unsafe { storage_write(cstr.as_ptr(), value.len(), value.as_ptr()) } {
-        StorageManagerError::SmeSuccess => Ok(()),
-        status => Err(status),
-    }
+    unsafe { storage_write(cstr.as_ptr(), value.len(), value.as_ptr()) }.into()
 }
