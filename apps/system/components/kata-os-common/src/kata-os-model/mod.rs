@@ -168,18 +168,16 @@ pub trait ModelState {
     fn set_untyped_cptr(&mut self, ix: usize, slot: seL4_CPtr);
 }
 
-// Fallback for when the copy_addr region is not setup or inconvenient
-// to use. This is large enough for a 64KiB frame which is the largest
-// last-level page size across all supported architectures.
-// XXX shrink per-arch?
-// XXX is this ever used?
+// Region for mapping one page of data for fills and when (optionally)
+// spilling arguments to a TCB's stack. init_copy_region unmaps the
+// pages backing this struct so target data can be mapped in.
+// NB: C code uses 64KB but we only map 1 PAGE_SIZE frame
 #[repr(align(65536))]
 struct CopyRegion {
-    // XXX assumes size_of::<seL4_Word> is 4 bytes
-    data: [seL4_Word; PAGE_SIZE * 4],
+    data: [seL4_Word; PAGE_SIZE / size_of::<seL4_Word>()],
 }
-static mut copy_addr_with_pt: CopyRegion = CopyRegion {
-    data: [0; PAGE_SIZE * 4],
+static mut copy_region: CopyRegion = CopyRegion {
+    data: [0; PAGE_SIZE / size_of::<seL4_Word>()],
 };
 
 // NB: keep this small as it must fit on a limited-size stack
@@ -196,10 +194,6 @@ pub struct KataOsModel<'a> {
 
     #[cfg(feature = "CONFIG_ARM_SMMU")]
     sid_number: usize,
-
-    // A region in which to map destination frames during loading; this is
-    // setup by init_copy_addr().
-    copy_addr: *mut u8,
 
     extended_bootinfo_table: [*const seL4_BootInfoHeader; SEL4_BOOTINFO_HEADER_NUM],
 
@@ -227,8 +221,6 @@ impl<'a> KataOsModel<'a> {
             #[cfg(feature = "CONFIG_ARM_SMMU")]
             sid_number: 0,
 
-            copy_addr: ptr::null_mut(),
-
             extended_bootinfo_table: [ptr::null(); SEL4_BOOTINFO_HEADER_NUM],
 
             vspace_roots: SmallVec::new(),
@@ -236,8 +228,7 @@ impl<'a> KataOsModel<'a> {
     }
 
     pub fn init_system(&mut self) -> seL4_Result {
-        self.init_copy_addr();
-        self.init_copy_frame();
+        self.init_copy_region();
 
         self.process_bootinfo()?;
 
@@ -276,21 +267,8 @@ impl<'a> KataOsModel<'a> {
         Ok(())
     }
 
-    fn init_copy_addr(&mut self) {
-        /* Set up a page-sized and -aligned region for mapping frames
-         * during loading. There is free memory after the end of our
-         * binary image + any additional frames the kernel has mapped.
-         * The kernel maps 1 page for IPC buffer 1 page for bootinfo
-         * and on some platforms additional extended bootinfo frames.
-         * So skip these pages and then round up to the next 16mb
-         * alignment for a spot we can map in a pagetable.
-         */
-        let bi_start = ptr::addr_of!(self.bootinfo.extraLen) as usize;
-        self.copy_addr = ROUND_UP(bi_start + PAGE_SIZE + self.bootinfo.extraLen, 0x1000000) as _;
-    }
-
-    fn init_copy_frame(&mut self) {
-        /* copy_addr_with_pt is mapped into bss. It will be used as an
+    fn init_copy_region(&mut self) {
+        /* copy_region is mapped into bss. It will be used as an
          * address range to map other data for frame loading so unmap
          * the existing pages. We locate the frame caps by looking in
          * the boot info and knowing that the userImageFrames are
@@ -333,11 +311,10 @@ impl<'a> KataOsModel<'a> {
         let lowest_mapped_vaddr = executable_start - additional_user_image_bytes;
 
         let copy_addr_frame: seL4_CPtr = self.bootinfo.userImageFrames.start
-            + (unsafe { ptr::addr_of!(copy_addr_with_pt.data[0]) as usize } / PAGE_SIZE)
+            + (unsafe { ptr::addr_of!(copy_region.data[0]) as usize } / PAGE_SIZE)
             - (lowest_mapped_vaddr / PAGE_SIZE);
         for i in 0..(size_of::<CopyRegion>() / PAGE_SIZE) {
-            // XXX check return
-            let _ = unsafe { seL4_Page_Unmap(copy_addr_frame + i) };
+            unsafe { seL4_Page_Unmap(copy_addr_frame + i) }.expect("copy_region");
         }
     }
 
@@ -541,12 +518,9 @@ impl<'a> KataOsModel<'a> {
             /*grant_reply=*/ 0, /*grant=*/ 0, /*read=*/ 1, /*write=*/ 1,
         );
 
-        // Map the frame to do the fill. Try first to map into the
-        // larger copy_addr region, otherwise fallback to the smaller
-        // copy_addr_with_pt region.
-        // XXX why?
-        let mut base = self.copy_addr as usize;
-        let mut error = unsafe {
+        // Map the frame to do the fill.
+        let base = unsafe { ptr::addr_of!(copy_region.data[0]) as usize };
+        unsafe {
             seL4_Page_Map(
                 sel4_frame,
                 seL4_CapInitThreadVSpace,
@@ -554,22 +528,7 @@ impl<'a> KataOsModel<'a> {
                 seL4_ReadWrite,
                 seL4_Default_VMAttributes,
             )
-        };
-        if error == Err(seL4_FailedLookup) {
-            base = unsafe { ptr::addr_of!(copy_addr_with_pt.data[0]) as usize };
-            error = unsafe {
-                seL4_Page_Map(
-                    sel4_frame,
-                    seL4_CapInitThreadVSpace,
-                    base,
-                    seL4_ReadWrite,
-                    seL4_Default_VMAttributes,
-                )
-            };
-        }
-        if error.is_err() {
-            return error;
-        }
+        }?;
 
         // Fill the frame contents from bootinfo or file data that's
         // embedded in our image.

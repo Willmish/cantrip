@@ -9,7 +9,7 @@ use crate::arch::PAGE_SIZE;
 use crate::arch::PT_SLOT;
 use crate::arch::REG_ARGS;
 use crate::arch::STACK_ALIGNMENT_BYTES;
-use crate::copy_addr_with_pt;
+use crate::copy_region;
 use crate::KataOsModel;
 use capdl::CDL_CapType::*;
 use capdl::*;
@@ -79,7 +79,7 @@ impl<'a> KataOsModel<'a> {
             seL4_Page_Map(
                 frame,
                 seL4_CapInitThreadVSpace,
-                ptr::addr_of!(copy_addr_with_pt.data[0]) as usize,
+                ptr::addr_of!(copy_region.data[0]) as usize,
                 // seL4_ReadWrite
                 seL4_CapRights::new(
                     /*grant_reply=*/ 0, /*grant=*/ 0, /*read=*/ 1, /*write=*/ 1,
@@ -103,7 +103,7 @@ impl<'a> KataOsModel<'a> {
             // NB: copy_region.data is [seL4_Word] but sp is in bytes
             unsafe {
                 ptr::write(
-                    &mut copy_addr_with_pt.data[(sp % PAGE_SIZE) / size_of::<seL4_Word>()],
+                    &mut copy_region.data[(sp % PAGE_SIZE) / size_of::<seL4_Word>()],
                     argv[i],
                 )
             };
