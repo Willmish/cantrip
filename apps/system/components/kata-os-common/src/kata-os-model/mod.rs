@@ -243,7 +243,6 @@ impl<'a> KataOsModel<'a> {
 
         trace!("Create objects...");
         self.create_objects()?; // loader_alloc::create_objects
-        self.find_vspace_roots()?;
 
         self.create_irq_caps()?;
         self.init_sched_ctrl()?; // scheduler::init_sched_ctrl
@@ -439,28 +438,6 @@ impl<'a> KataOsModel<'a> {
             }
             Some(e) => e.into(),
         }
-    }
-
-    // Collect the VSpace root objects for later use.
-    // TODO(sleffler): combine this with create_objects to eliminate a full scan
-    //    of the object list
-    pub fn find_vspace_roots(&mut self) -> seL4_Result {
-        // Collect the roots in a local SmallVec so we can dedup entries
-        // before we stash them in self.vpsace_roots. This minimizes the
-        // possibility of vpsace_roots spilling to the heap.
-        let mut roots = self.vspace_roots.clone();
-        for obj_id in 0..self.spec.num {
-            let obj = &self.get_object(obj_id);
-            if obj.r#type() == CDL_TCB {
-                if let Some(root_cap) = obj.get_cap_at(CDL_TCB_VTable_Slot) {
-                    roots.push(root_cap.obj_id);
-                }
-            }
-        }
-        roots.sort();
-        roots.dedup();
-        self.vspace_roots.extend_from_slice(&roots);
-        Ok(())
     }
 
     pub fn create_irq_caps(&mut self) -> seL4_Result {
@@ -785,7 +762,7 @@ impl<'a> KataOsModel<'a> {
         //                rights.get_capAllowRead(),
         //                rights.get_capAllowWrite(),
         //                page_cap.vm_attribs());
-        //
+
         // FIXME: Add support for super-pages.
         // NB: arch::seL4_Page_Map handles arch-specific work like
         //     marking the NX bit and invalidating/flushing caches.

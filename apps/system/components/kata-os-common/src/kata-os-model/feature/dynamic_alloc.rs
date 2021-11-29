@@ -5,6 +5,7 @@ use capdl::kobject_t::KOBJECT_FRAME;
 use capdl::CDL_ObjectType::*;
 use capdl::*;
 use log::{debug, trace};
+use smallvec::SmallVec;
 
 use sel4_sys::seL4_BootInfo;
 use sel4_sys::seL4_CNode_Copy;
@@ -52,6 +53,11 @@ impl<'a> KataOsModel<'a> {
         let num_normal_untypes = self.sort_untypeds(self.bootinfo);
         let mut ut_index = 0; // index into untypeds
 
+        // Collect the roots in a local SmallVec so we can dedup entries
+        // before we stash them in self.vpsace_roots. This minimizes the
+        // possibility of vpsace_roots spilling to the heap.
+        let mut roots = SmallVec::new();
+
         // First, allocate most objects and record the cslot locations.
         // The exception is ASIDPools, where create_object only allocates
         // the backing untypeds.
@@ -81,6 +87,13 @@ impl<'a> KataOsModel<'a> {
                 ut_index += 1;
                 if ut_index >= num_normal_untypes {
                     panic!("Out of untyped memory.");
+                }
+            }
+
+            // Capture VSpace roots for later use.
+            if obj.r#type() == CDL_TCB {
+                if let Some(root_cap) = obj.get_cap_at(CDL_TCB_VTable_Slot) {
+                    roots.push(root_cap.obj_id);
                 }
             }
             // Record the cslot assigned to the object.
@@ -121,6 +134,12 @@ impl<'a> KataOsModel<'a> {
 
         // Update the free slot to go past all the objects we just made.
         self.free_slot_start += free_slot_index;
+
+        // Stash the VSpace roots.
+        roots.sort();
+        roots.dedup();
+        self.vspace_roots = roots;
+
         Ok(())
     }
 

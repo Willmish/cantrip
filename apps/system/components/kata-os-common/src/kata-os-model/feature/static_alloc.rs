@@ -5,6 +5,7 @@ use crate::KataOsModel;
 use capdl::CDL_ObjectType::*;
 use capdl::*;
 use log::debug;
+use smallvec::SmallVec;
 
 use crate::arch::seL4_ASIDControl_MakePool;
 use crate::arch::seL4_ArchObjectType;
@@ -75,6 +76,11 @@ impl<'a> KataOsModel<'a> {
 
         let mut free_slot_index = 0;
 
+        // Collect the roots in a local SmallVec so we can dedup entries
+        // before we stash them in self.vpsace_roots. This minimizes the
+        // possibility of vpsace_roots spilling to the heap.
+        let mut roots = SmallVec::new();
+
         /* First, allocate most objects and update the spec database with
         the cslot locations. The exception is ASIDPools, where
         create_object only allocates the backing untypeds. */
@@ -101,6 +107,13 @@ impl<'a> KataOsModel<'a> {
                 );
 
                 self.create_object(obj, obj_id, untyped_cptr, free_slot)?;
+
+                // Capture VSpace roots for later use.
+                if obj.r#type() == CDL_TCB {
+                    if let Some(root_cap) = obj.get_cap_at(CDL_TCB_VTable_Slot) {
+                        roots.push(root_cap.obj_id);
+                    }
+                }
                 self.set_orig_cap(obj_id, free_slot);
                 free_slot_index += 1;
             }
@@ -134,6 +147,12 @@ impl<'a> KataOsModel<'a> {
 
         // Update the free slot to go past all the objects we just made.
         self.free_slot_start += free_slot_index;
+
+        // Stash the VSpace roots.
+        roots.sort();
+        roots.dedup();
+        self.vspace_roots = roots;
+
         Ok(())
     }
 
