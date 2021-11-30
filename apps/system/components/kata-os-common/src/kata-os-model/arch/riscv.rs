@@ -9,8 +9,13 @@ assert_cfg!(any(target_arch = "riscv32", target_arch = "riscv64"));
 use capdl::CDL_ObjectType::*;
 use capdl::*;
 
+use sel4_sys::seL4_CapRights;
+use sel4_sys::seL4_CPtr;
 use sel4_sys::seL4_PageBits;
 use sel4_sys::seL4_PageTableIndexBits;
+use sel4_sys::seL4_Result;
+use sel4_sys::seL4_RISCV_Page_Map;
+use sel4_sys::seL4_RISCV_VMAttributes;
 use sel4_sys::seL4_Word;
 
 pub const PAGE_SIZE: usize = 4096; // Base page size
@@ -24,10 +29,25 @@ pub use sel4_sys::seL4_RISCV_ASIDControl_MakePool as seL4_ASIDControl_MakePool;
 pub use sel4_sys::seL4_RISCV_ASIDPool_Assign as seL4_ASIDPool_Assign;
 pub use sel4_sys::seL4_RISCV_PageTable_Map as seL4_PageTable_Map;
 pub use sel4_sys::seL4_RISCV_Page_GetAddress as seL4_Page_GetAddress;
-pub use sel4_sys::seL4_RISCV_Page_Map as seL4_Page_Map;
 pub use sel4_sys::seL4_RISCV_Page_Unmap as seL4_Page_Unmap;
 pub use sel4_sys::seL4_RISCV_VMAttributes as seL4_VMAttributes;
 pub use sel4_sys::seL4_RISCV_VMAttributes::Default_VMAttributes as seL4_Default_VMAttributes;
+
+pub unsafe fn seL4_Page_Map(
+    sel4_page: seL4_CPtr,
+    sel4_pd: seL4_CPtr,
+    vaddr: seL4_Word,
+    rights: seL4_CapRights,
+    vm_attribs: seL4_VMAttributes,
+) -> seL4_Result {
+    if rights.get_capAllowGrant() != 0 {
+        // NB: executable
+        seL4_RISCV_Page_Map(sel4_page, sel4_pd, vaddr, rights, vm_attribs)
+    } else {
+        seL4_RISCV_Page_Map(sel4_page, sel4_pd, vaddr, rights,
+                            seL4_RISCV_VMAttributes::ExecuteNever)
+    }
+}
 
 fn MASK(pow2_bits: usize) -> usize { (1 << pow2_bits) - 1 }
 
