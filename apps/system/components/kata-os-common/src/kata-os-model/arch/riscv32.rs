@@ -8,7 +8,6 @@ assert_cfg!(target_arch = "riscv32");
 mod riscv;
 pub use riscv::*;
 
-use crate::seL4_ArchObjectType::*;
 use crate::KataOsModel;
 use capdl::kobject_t::*;
 use capdl::CDL_CapType::*;
@@ -16,13 +15,17 @@ use capdl::CDL_ObjectType::*;
 use capdl::*;
 use log::error;
 
-use sel4_sys::seL4_CPtr;
-use sel4_sys::seL4_CapIRQControl;
 use sel4_sys::seL4_CapInitThreadCNode;
+use sel4_sys::seL4_CapIRQControl;
+use sel4_sys::seL4_CPtr;
 use sel4_sys::seL4_Error;
 use sel4_sys::seL4_IRQControl_Get;
 use sel4_sys::seL4_LargePageBits;
+use sel4_sys::seL4_MinSchedContextBits;
+use sel4_sys::seL4_ObjectType;
+use sel4_sys::seL4_ObjectType::*;
 use sel4_sys::seL4_PageBits;
+use sel4_sys::seL4_PageTableBits;
 use sel4_sys::seL4_PageTableIndexBits;
 use sel4_sys::seL4_Result;
 use sel4_sys::seL4_UserContext;
@@ -32,54 +35,6 @@ use sel4_sys::seL4_WordBits;
 const CDL_PT_NUM_LEVELS: usize = 2;
 // TOOD(sleffler): levels really should be 0 & 1, the names are vestiges of 64-bit support
 const CDL_PT_LEVEL_3_IndexBits: usize = seL4_PageTableIndexBits;
-
-// XXX this is a mess; seL4 chains enums with a maze of #ifdefs which
-// makes it infeasible to use directly
-#[repr(usize)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum seL4_ArchObjectType {
-    seL4_UntypedObject = 0,
-    seL4_TCBObject,
-    seL4_EndpointObject,
-    seL4_NotificationObject,
-    seL4_CapTableObject,
-
-    #[cfg(feature = "CONFIG_KERNEL_MCS")]
-    seL4_SchedContextObject,
-    #[cfg(feature = "CONFIG_KERNEL_MCS")]
-    seL4_ReplyObject,
-
-    seL4_RISCV_4K_Page,
-    seL4_RISCV_Mega_Page,
-    seL4_RISCV_PageTableObject,
-
-    seL4_InvalidObjectType = 99,
-}
-impl From<seL4_ArchObjectType> for seL4_Word {
-    fn from(type_: seL4_ArchObjectType) -> seL4_Word { unsafe { ::core::mem::transmute(type_) } }
-}
-impl From<CDL_ObjectType> for seL4_ArchObjectType {
-    fn from(type_: CDL_ObjectType) -> seL4_ArchObjectType {
-        // XXX transmute and check for invalid
-        match type_ {
-            CDL_Untyped => seL4_UntypedObject,
-            CDL_TCB => seL4_TCBObject,
-            CDL_Endpoint => seL4_EndpointObject,
-            CDL_Notification => seL4_NotificationObject,
-            CDL_CNode => seL4_CapTableObject,
-            CDL_Frame => seL4_RISCV_4K_Page,
-            // 6 = seL4_RISCV_Mega_Page
-            CDL_PT => seL4_RISCV_PageTableObject,
-
-            #[cfg(feature = "CONFIG_KERNEL_MCS")]
-            CDL_SchedContext => seL4_SchedContext,
-            #[cfg(feature = "CONFIG_KERNEL_MCS")]
-            CDL_RTReply => seL4_ReplyObject,
-
-            _ => seL4_InvalidObjectType,
-        }
-    }
-}
 
 fn MASK(pow2_bits: usize) -> usize { (1 << pow2_bits) - 1 }
 
@@ -125,19 +80,24 @@ pub fn get_user_context(cdl_tcb: &CDL_Object, sp: seL4_Word) -> *const seL4_User
 }
 
 pub fn kobject_get_size(t: kobject_t, object_size: seL4_Word) -> seL4_Word {
-    if t == kobject_t::KOBJECT_FRAME
-        && (object_size == seL4_PageBits || object_size == seL4_LargePageBits)
-    {
-        return object_size;
-    }
-    #[cfg(feature = "CONFIG_KERNEL_MCS")]
-    if t == KOBJECT_SCHED_CONTEXT {
-        return core::cmp::max(object_size, sel4_sys::seL4_MinSchedContextBits);
+    match t {
+        KOBJECT_FRAME => {
+            if object_size == seL4_PageBits || object_size == seL4_LargePageBits {
+                return object_size;
+            }
+        }
+        KOBJECT_PAGE_TABLE  => {
+            return seL4_PageTableBits;
+        }
+        KOBJECT_SCHED_CONTEXT => {
+            return core::cmp::max(object_size, seL4_MinSchedContextBits);
+        }
+        _ => {}
     }
     error!("Unexpected object: type {:?} size {}", t, object_size);
-    0
+    object_size
 }
-pub fn kobject_get_type(t: kobject_t, object_size: seL4_Word) -> seL4_ArchObjectType {
+pub fn kobject_get_type(t: kobject_t, object_size: seL4_Word) -> seL4_ObjectType {
     match t {
         KOBJECT_PAGE_DIRECTORY => {
             return seL4_RISCV_PageTableObject;
@@ -152,12 +112,11 @@ pub fn kobject_get_type(t: kobject_t, object_size: seL4_Word) -> seL4_ArchObject
             if object_size == seL4_LargePageBits {
                 return seL4_RISCV_Mega_Page;
             }
-            error!("Unexpected frame size {}", object_size);
         }
         _ => {}
     }
     error!("Unexpected object: type {:?} size {}", t, object_size);
-    seL4_InvalidObjectType
+    seL4_LastObjectType // XXX not right
 }
 
 impl<'a> KataOsModel<'a> {

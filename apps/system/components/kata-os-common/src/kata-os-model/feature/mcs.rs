@@ -3,24 +3,28 @@
 use crate::KataOsModel;
 use capdl::CDL_ObjectType::*;
 use capdl::*;
-use log::warn;
+use log::debug;
 
 use sel4_sys::seL4_CNode;
 use sel4_sys::seL4_CPtr;
 use sel4_sys::seL4_CapInitThreadTCB;
 use sel4_sys::seL4_Error;
 use sel4_sys::seL4_Result;
-use sel4_sys::seL4_SchedControl_Configure;
+use sel4_sys::seL4_SchedContext;
+use sel4_sys::seL4_SchedContext_NoFlag;
+use sel4_sys::seL4_SchedControl;
+use sel4_sys::seL4_SchedControl_ConfigureFlags;
 use sel4_sys::seL4_TCB_Configure;
 use sel4_sys::seL4_TCB_SetSchedParams;
 use sel4_sys::seL4_TCB_SetTimeoutEndpoint;
+use sel4_sys::seL4_Time;
 use sel4_sys::seL4_Word;
 
 use static_assertions::assert_cfg;
 assert_cfg!(feature = "CONFIG_KERNEL_MCS");
 
 impl<'a> KataOsModel<'a> {
-    pub fn init_sched_ctrl(&self) -> seL4_Result {
+    pub fn init_sched_ctrl(&mut self) -> seL4_Result {
         for index in 0..(self.bootinfo.schedcontrol.end - self.bootinfo.schedcontrol.start) {
             self.set_sched_ctrl_cap(index, self.bootinfo.schedcontrol.start + index);
         }
@@ -58,7 +62,7 @@ impl<'a> KataOsModel<'a> {
             if let Some(cap_tempfault_ep) = cdl_tcb.get_cap_at(CDL_TCB_TemporalFaultEP_Slot) {
                 self.get_orig_cap(cap_tempfault_ep.obj_id)
             } else {
-                warn!("  Warning: TCB {} has no temporal fault endpoint", cdl_tcb.name());
+                debug!("TCB {} has no temporal fault endpoint", cdl_tcb.name());
                 0
             };
 
@@ -72,7 +76,7 @@ impl<'a> KataOsModel<'a> {
                     self.get_orig_cap(fault_ep_obj)
                 }
             } else {
-                warn!("  Warning: TCB {} has no fault endpoint", cdl_tcb.name());
+                debug!("TCB {} has no fault endpoint", cdl_tcb.name());
                 0
             };
         Ok((sel4_fault_ep, sel4_tempfault_ep))
@@ -81,16 +85,20 @@ impl<'a> KataOsModel<'a> {
 
 // TODO(sleffler): match syscall types
 pub fn SchedControl_Configure(
-    sched_ctrl: seL4_CPtr,
-    sel4_sc: seL4_Word,
-    affinity: seL4_Word,
-    sc_budget: u64,
-    sc_period: u64,
+    sched_ctrl: seL4_SchedControl,
+    sel4_sc: seL4_SchedContext,
+    _affinity: seL4_Word,
+    sc_budget: seL4_Time,
+    sc_period: seL4_Time,
     sc_data: seL4_Word,
 ) -> seL4_Result {
     assert!(sel4_sc != 0);
     unsafe {
-        seL4_SchedControl_Configure(sched_ctrl, sel4_sc, sc_budget, sc_period, affinity, sc_data)
+        seL4_SchedControl_ConfigureFlags(sched_ctrl, sel4_sc,
+                                          sc_budget, sc_period,
+                                          /*extra_refills=*/ 0,
+                                          /*badge=*/ sc_data,
+                                          /*flags=*/ seL4_SchedContext_NoFlag)
     }
 }
 

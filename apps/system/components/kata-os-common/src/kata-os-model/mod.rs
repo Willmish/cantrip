@@ -27,23 +27,26 @@ use static_assertions::*;
 use sel4_sys::seL4_ASIDPoolBits;
 use sel4_sys::seL4_BootInfo;
 use sel4_sys::seL4_BootInfoHeader;
+use sel4_sys::SEL4_BOOTINFO_HEADER_NUM;
+use sel4_sys::seL4_CapASIDControl;
+use sel4_sys::seL4_CapDomain;
+use sel4_sys::seL4_CapInitThreadASIDPool;
+use sel4_sys::seL4_CapInitThreadCNode;
+use sel4_sys::seL4_CapInitThreadVSpace;
+use sel4_sys::seL4_CapIRQControl;
+use sel4_sys::seL4_CapRights;
 use sel4_sys::seL4_CNode_Copy;
 use sel4_sys::seL4_CNode_Mint;
 use sel4_sys::seL4_CNode_Move;
 use sel4_sys::seL4_CNode_Mutate;
 use sel4_sys::seL4_CPtr;
-use sel4_sys::seL4_CapASIDControl;
-use sel4_sys::seL4_CapDomain;
-use sel4_sys::seL4_CapIRQControl;
-use sel4_sys::seL4_CapInitThreadASIDPool;
-use sel4_sys::seL4_CapInitThreadCNode;
-use sel4_sys::seL4_CapInitThreadVSpace;
-use sel4_sys::seL4_CapRights;
 use sel4_sys::seL4_DebugNameThread;
 use sel4_sys::seL4_DomainSet_Set;
-use sel4_sys::seL4_Error;
 use sel4_sys::seL4_Error::*;
+use sel4_sys::seL4_Error;
 use sel4_sys::seL4_IRQHandler_SetNotification;
+use sel4_sys::seL4_ObjectType::*;
+use sel4_sys::seL4_ObjectType;
 use sel4_sys::seL4_Result;
 use sel4_sys::seL4_TCB_Resume;
 use sel4_sys::seL4_TCB_WriteRegisters;
@@ -51,7 +54,6 @@ use sel4_sys::seL4_Untyped_Retype;
 use sel4_sys::seL4_UserContext;
 use sel4_sys::seL4_Word;
 use sel4_sys::seL4_WordBits;
-use sel4_sys::SEL4_BOOTINFO_HEADER_NUM;
 
 // Setup arch- & feature-specific support. Note these must be named
 // explicitly below; e.g. loader_alloc::check_untypeds.
@@ -72,8 +74,6 @@ use arch::PAGE_SIZE; // Base  page size, typically 4KB
 
 // XXX should come from sel4_sys
 use arch::seL4_ASIDPool_Assign;
-use arch::seL4_ArchObjectType;
-use arch::seL4_ArchObjectType::*;
 use arch::seL4_Default_VMAttributes;
 use arch::seL4_PageTable_Map;
 use arch::seL4_Page_GetAddress;
@@ -363,7 +363,7 @@ impl<'a> KataOsModel<'a> {
         fn retype_untyped(
             free_slot: seL4_CPtr,
             free_untyped: seL4_CPtr,
-            obj_type: seL4_ArchObjectType,
+            obj_type: seL4_ObjectType,
             obj_size: usize,
         ) -> seL4_Result {
             unsafe {
@@ -381,7 +381,7 @@ impl<'a> KataOsModel<'a> {
         }
 
         let mut obj_size = obj.size_bits();
-        let arch_type: seL4_ArchObjectType = match obj.r#type() {
+        let arch_type: seL4_ObjectType = match obj.r#type() {
             CDL_Frame => {
                 // Calculate the frame-size-specific cap.
                 arch::kobject_get_type(KOBJECT_FRAME, obj_size)

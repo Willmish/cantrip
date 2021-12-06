@@ -8,11 +8,11 @@ use log::debug;
 use smallvec::SmallVec;
 
 use crate::arch::seL4_ASIDControl_MakePool;
-use crate::arch::seL4_ArchObjectType;
 
-use sel4_sys::seL4_CPtr;
 use sel4_sys::seL4_CapASIDControl;
 use sel4_sys::seL4_CapInitThreadCNode;
+use sel4_sys::seL4_CPtr;
+use sel4_sys::seL4_ObjectType;
 use sel4_sys::seL4_Result;
 use sel4_sys::seL4_Untyped_Retype;
 use sel4_sys::seL4_Word;
@@ -160,7 +160,7 @@ impl<'a> KataOsModel<'a> {
         &self,
         free_slot: seL4_CPtr,
         untyped_slot: seL4_CPtr,
-        sel4_type: seL4_ArchObjectType,
+        sel4_type: seL4_ObjectType,
         obj_size: usize,
         _paddr: seL4_Word,
         _obj_id: CDL_ObjID,

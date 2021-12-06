@@ -8,14 +8,16 @@ use log::{debug, trace};
 use smallvec::SmallVec;
 
 use sel4_sys::seL4_BootInfo;
+use sel4_sys::seL4_CapASIDControl;
+use sel4_sys::seL4_CapInitThreadCNode;
+use sel4_sys::seL4_CapRights;
 use sel4_sys::seL4_CNode_Copy;
 use sel4_sys::seL4_CNode_Delete;
 use sel4_sys::seL4_CNode_Move;
 use sel4_sys::seL4_CPtr;
-use sel4_sys::seL4_CapASIDControl;
-use sel4_sys::seL4_CapInitThreadCNode;
-use sel4_sys::seL4_CapRights;
 use sel4_sys::seL4_Error;
+use sel4_sys::seL4_ObjectType::*;
+use sel4_sys::seL4_ObjectType;
 use sel4_sys::seL4_PageBits;
 use sel4_sys::seL4_Result;
 use sel4_sys::seL4_UntypedDesc;
@@ -26,8 +28,6 @@ use sel4_sys::seL4_WordBits;
 use crate::arch::kobject_get_type;
 use crate::arch::requires_creation;
 use crate::arch::seL4_ASIDControl_MakePool;
-use crate::arch::seL4_ArchObjectType;
-use crate::arch::seL4_ArchObjectType::*;
 use crate::arch::seL4_Page_GetAddress;
 
 use static_assertions::assert_cfg;
@@ -192,8 +192,8 @@ impl<'a> KataOsModel<'a> {
     pub fn find_device_object(
         &self,
         free_slot: seL4_CPtr,
-        _untyped_slot: seL4_CPtr,
-        sel4_type: seL4_ArchObjectType,
+        _untyped_index: usize,
+        sel4_type: seL4_ObjectType,
         obj_size_bits: usize,
         paddr: seL4_Word,
         obj_id: CDL_ObjID,

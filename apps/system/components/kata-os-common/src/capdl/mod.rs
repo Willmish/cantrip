@@ -21,6 +21,8 @@ use sel4_sys::SEL4_BOOTINFO_HEADER_X86_VBE;
 use sel4_sys::seL4_CapRights;
 use sel4_sys::seL4_CNode_CapData;
 use sel4_sys::seL4_CPtr;
+use sel4_sys::seL4_ObjectType;
+use sel4_sys::seL4_ObjectTypeCount;
 use sel4_sys::seL4_Word;
 
 use self::CDL_CapDataType::*;
@@ -411,36 +413,51 @@ impl<'a> CDL_CapMap {
     }
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct CDL_ObjSlot {
-    pub slot: seL4_Word,
-    pub id: CDL_ObjID,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct CDL_ObjMap {
-    pub num: seL4_Word,
-    pub slot: *mut CDL_ObjSlot,
-}
-
 // TODO(sleffler): values depend on config & arch, this works for riscv
+//   might be better to ditch the enum or move to arch
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum CDL_ObjectType {
     CDL_Untyped = 0,
-    CDL_TCB = 1,
-    CDL_Endpoint = 2,
-    CDL_Notification = 3,
-    CDL_CNode = 4,
-    CDL_Frame = 5,
-    // 6 = seL4_RISCV_Mega_Page
-    CDL_PT = 7,
-    CDL_ASIDPool = 9,
-    CDL_Interrupt = 10,
-    CDL_SchedContext = 13,
-    CDL_RTReply = 14,
+    CDL_TCB,
+    CDL_Endpoint,
+    CDL_Notification,
+    CDL_CNode,
+
+    #[cfg(feature = "CONFIG_KERNEL_MCS")]
+    CDL_SchedContext,
+    #[cfg(feature = "CONFIG_KERNEL_MCS")]
+    CDL_RTReply,
+
+    // XXX these work for CONFIG_ARCH_RISCV
+    CDL_Frame,
+    CDL_Mega_Frame,
+    CDL_PT,
+
+    // NB: remainder are numbered relative to seL4_ObjectTypeCount
+    CDL_ASIDPool = seL4_ObjectTypeCount + 1,
+    CDL_Interrupt,
+    CDL_IOPorts,        // CONFIG_ARCH_X86
+    CDL_IODevice,       // CONFIG_ARCH_X86
+
+    // NB: when MCS is not enabled these are still defined (sigh)
+    #[cfg(not(feature = "CONFIG_KERNEL_MCS"))]
+    CDL_SchedContext,
+    #[cfg(not(feature = "CONFIG_KERNEL_MCS"))]
+    CDL_RTReply,
+
+    CDL_IOAPICInterrupt, // CONFIG_ARCH_X86
+    CDL_MSIInterrupt,    // CONFIG_ARCH_X86
+    CDL_ARMIODevice,     // CONFIG_ARCH_ARM
+    CDL_PT_ROOT_ALIAS,   // NB: not used, placeholder
+    CDL_ARMInterrupt,    // CONFIG_ARCH_ARM
+    CDL_SID,             // CONFIG_ARCH_ARM
+    CDL_CB,              // CONFIG_ARCH_ARM
+}
+impl From<CDL_ObjectType> for seL4_ObjectType {
+    fn from(type_: CDL_ObjectType) -> seL4_ObjectType {
+        unsafe { ::core::mem::transmute(type_) }
+    }
 }
 
 #[repr(C)]

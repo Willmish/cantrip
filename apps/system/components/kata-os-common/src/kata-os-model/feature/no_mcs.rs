@@ -3,21 +3,24 @@
 use crate::KataOsModel;
 use capdl::*;
 
+use sel4_sys::seL4_CapInitThreadTCB;
 use sel4_sys::seL4_CNode;
 use sel4_sys::seL4_CPtr;
-use sel4_sys::seL4_CapInitThreadTCB;
 use sel4_sys::seL4_Error;
 use sel4_sys::seL4_Result;
+use sel4_sys::seL4_SchedContext;
+use sel4_sys::seL4_SchedControl;
 use sel4_sys::seL4_TCB;
 use sel4_sys::seL4_TCB_Configure;
 use sel4_sys::seL4_TCB_SetSchedParams;
+use sel4_sys::seL4_Time;
 use sel4_sys::seL4_Word;
 
 use static_assertions::assert_cfg;
 assert_cfg!(not(feature = "CONFIG_KERNEL_MCS"));
 
 impl<'a> KataOsModel<'a> {
-    pub fn init_sched_ctrl(&self) -> seL4_Result { Ok(()) }
+    pub fn init_sched_ctrl(&mut self) -> seL4_Result { Ok(()) }
     pub fn init_scs(&self) -> seL4_Result { Ok(()) }
     pub fn init_fault_ep(
         &mut self,
@@ -30,11 +33,11 @@ impl<'a> KataOsModel<'a> {
 
 // TODO(sleffler): match syscall types
 pub fn SchedControl_Configure(
-    _sched_ctrl: seL4_CPtr,
-    _sel4_sc: seL4_Word,
+    _sched_ctrl: seL4_SchedControl,
+    _sel4_sc: seL4_SchedContext,
     _affinity: seL4_Word,
-    _sc_budget: u64,
-    _sc_period: u64,
+    _sc_budget: seL4_Time,
+    _sc_period: seL4_Time,
     _sc_data: seL4_Word,
 ) -> seL4_Result {
     Ok(())

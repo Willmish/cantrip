@@ -5,7 +5,6 @@
 use static_assertions::assert_cfg;
 assert_cfg!(all(target_arch = "arm", target_pointer_width = "32"));
 
-use crate::seL4_ArchObjectType::*;
 use crate::KataOsModel;
 use capdl::kobject_t::*;
 use capdl::CDL_CapType::*;
@@ -17,15 +16,16 @@ use sel4_sys::seL4_ARM_Page_CleanInvalidate_Data;
 use sel4_sys::seL4_ARM_Page_Map;
 use sel4_sys::seL4_ARM_Page_Unify_Instruction;
 
-use sel4_sys::seL4_CPtr;
-use sel4_sys::seL4_CapIRQControl;
 use sel4_sys::seL4_CapInitThreadCNode;
+use sel4_sys::seL4_CapIRQControl;
+use sel4_sys::seL4_CPtr;
 use sel4_sys::seL4_Error;
 use sel4_sys::seL4_IRQControl_Get;
-use sel4_sys::seL4_PUDIndexBits;
+use sel4_sys::seL4_ObjectType::*;
 use sel4_sys::seL4_PageBits;
 use sel4_sys::seL4_PageDirIndexBits;
 use sel4_sys::seL4_PageTableIndexBits;
+use sel4_sys::seL4_PUDIndexBits;
 use sel4_sys::seL4_Result;
 use sel4_sys::seL4_UserContext;
 use sel4_sys::seL4_Word;
@@ -45,73 +45,6 @@ pub use sel4_sys::seL4_ARM_Page_GetAddress as seL4_Page_GetAddress;
 pub use sel4_sys::seL4_ARM_Page_Unmap as seL4_Page_Unmap;
 pub use sel4_sys::seL4_ARM_VMAttributes as seL4_VMAttributes;
 pub use sel4_sys::seL4_ARM_VMAttributes::Default_VMAttributes as seL4_Default_VMAttributes;
-
-// XXX this is a mess; seL4 chains enums with a maze of #ifdefs which
-// makes it infeasible to use directly
-#[repr(usize)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum seL4_ArchObjectType {
-    seL4_UntypedObject = 0,
-    seL4_TCBObject,
-    seL4_EndpointObject,
-    seL4_NotificationObject,
-    seL4_CapTableObject,
-
-    #[cfg(feature = "CONFIG_KERNEL_MCS")]
-    seL4_SchedContextObject,
-    #[cfg(feature = "CONFIG_KERNEL_MCS")]
-    seL4_ReplyObject,
-
-    seL4_ARM_SmallPageObject,
-    seL4_ARM_LargePageObject,
-    seL4_ARM_PageTableObject,
-    seL4_ARM_PageDirectoryObject,
-
-    #[cfg(feature = "CONFIG_ARM_HYPERVISOR_SUPPORT")]
-    seL4_ARM_VCPUObject,
-
-    #[cfg(feature = "CONFIG_TK1_SMMU")]
-    seL4_ARM_IOPageTableObject,
-
-    seL4_InvalidObjectType = 99,
-}
-impl From<seL4_ArchObjectType> for seL4_Word {
-    fn from(type_: seL4_ArchObjectType) -> seL4_Word { unsafe { ::core::mem::transmute(type_) } }
-}
-impl From<CDL_ObjectType> for seL4_ArchObjectType {
-    fn from(type_: CDL_ObjectType) -> seL4_ArchObjectType {
-        // XXX transmute and check for invalid
-        match type_ {
-            CDL_Untyped => seL4_UntypedObject,
-            CDL_TCB => seL4_TCBObject,
-            CDL_Endpoint => seL4_EndpointObject,
-            CDL_Notification => seL4_NotificationObject,
-            CDL_CNode => seL4_CapTableObject,
-
-            #[cfg(feature = "CONFIG_KERNEL_MCS")]
-            CDL_SchedContext => seL4_SchedContext,
-            #[cfg(feature = "CONFIG_KERNEL_MCS")]
-            CDL_RTReply => seL4_ReplyObject,
-
-            CDL_PT => seL4_ARM_PageTableObject,
-            CDL_PD => seL4_ARM_PageDirectoryObject,
-            CDL_Frame => seL4_ARM_SmallPageObject,
-            // XXX seL4_ARM_LargePageObject,
-            #[cfg(feature = "CONFIG_ARM_HYPERVISOR_SUPPORT")]
-            CDL_VCPU => seL4_ARM_VCPUObject,
-
-            CDL_ARMIODevice => mumble,
-            CDL_ARMInterrupt => mumble,
-            CDL_SID => mumble,
-            CDL_CB => mumble,
-
-            #[cfg(feature = "CONFIG_TK1_SMMU")]
-            CDL_ARMIOXXX => seL4_ARM_IOPageTableObject,
-
-            _ => seL4_InvalidObjectType,
-        }
-    }
-}
 
 pub fn seL4_Page_Map(
     sel4_page: seL4_ARM_Page,
@@ -244,7 +177,7 @@ pub fn kobject_get_size(t: kobject_t, object_size: seL4_Word) -> seL4_Word {
     error!("Unexpected object: type {:?} size {}", t, object_size);
     0
 }
-pub fn kobject_get_type(t: kobject_t, object_size: seL4_Word) -> seL4_ArchObjectType {
+pub fn kobject_get_type(t: kobject_t, object_size: seL4_Word) -> seL4_ObjectType {
     match t {
         KOBJECT_PAGE_GLOBAL_DIRECTORY => {
             return seL4_ARM_PageGlobalDirectoryObject;
