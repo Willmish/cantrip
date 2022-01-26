@@ -10,6 +10,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 
+use core::mem::size_of;
 use cstr_core;
 use sel4_sys::SEL4_BOOTINFO_HEADER_FDT;
 use sel4_sys::SEL4_BOOTINFO_HEADER_PADDING;
@@ -555,6 +556,11 @@ pub struct CDL_FrameFill_FileDataType_t {
     pub filename: *const cstr_core::c_char,
     pub file_offset: usize,
 }
+impl<'a> CDL_FrameFill_FileDataType_t {
+    pub fn filename(&'a self) -> &'a str {
+        unsafe { cstr_core::CStr::from_ptr(self.filename) }.to_str().unwrap()
+    }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -604,7 +610,7 @@ impl<'a> CDL_Object {
     #[cfg(feature = "CONFIG_DEBUG_BUILD")]
     pub fn name(&self) -> &str {
         if self.name.is_null() {
-            "<unnamed>"
+            "<null>"
         } else {
             unsafe { cstr_core::CStr::from_ptr(self.name) }
                 .to_str()
@@ -614,7 +620,7 @@ impl<'a> CDL_Object {
 
     #[cfg(not(feature = "CONFIG_DEBUG_BUILD"))]
     #[inline]
-    pub fn name(&self) -> &str { "<unnamed>" }
+    pub fn name(&self) -> &str { "<n/a>" }
 
     pub fn slots_slice(&'a self) -> &'a [CDL_CapSlot] {
         #[allow(unaligned_references)]
@@ -698,10 +704,15 @@ impl<'a> CDL_Object {
     pub fn tcb_sp(&self) -> seL4_Word {
         unsafe { self.extra.tcb_extra.sp }
     }
-    pub fn tcb_elf_name(&'a self) -> &'a str {
-        unsafe { cstr_core::CStr::from_ptr(self.extra.tcb_extra.elf_name) }
-            .to_str()
-            .unwrap()
+    pub fn tcb_elf_name(&'a self) -> Option<&'a str> {
+        unsafe {
+            if self.extra.tcb_extra.elf_name.is_null() {
+                None
+            } else {
+                cstr_core::CStr::from_ptr(self.extra.tcb_extra.elf_name)
+                    .to_str().ok()
+            }
+        }
     }
     #[inline]
     pub fn tcb_resume(&self) -> bool {
@@ -859,5 +870,42 @@ impl<'a> CDL_Model {
     }
     pub fn asid_slot_slice(&'a self) -> &'a [CDL_ObjID] {
         unsafe { core::slice::from_raw_parts(self.asid_slots, self.num_asid_slots) }
+    }
+
+    // Calculate the space occupied by the capDL specification.
+    pub fn calc_space(&self) -> usize {
+        let mut total_space =
+              size_of::<CDL_Model>() +
+              self.num * size_of::<CDL_Object>() +
+              self.num_irqs * size_of::<CDL_ObjID>() +
+              self.num_untyped * size_of::<CDL_UntypedDerivation>() +
+              self.num_asid_slots * size_of::<CDL_ObjID>();
+        for obj in self.obj_slice() {
+            #[cfg(feature = "CONFIG_DEBUG_BUILD")]
+            if !obj.name.is_null() {
+                total_space += obj.name().len() + 1;
+            }
+            total_space += obj.slots.num * size_of::<CDL_CapSlot>();
+            match obj.r#type() {
+                CDL_TCB => {
+                    total_space += obj.tcb_init_sz() * size_of::<seL4_Word>();
+                    if let Some(str) = obj.tcb_elf_name() {
+                        total_space += str.len() + 1;
+                    }
+                }
+                CDL_Frame => {
+                    // TOOD(sleffler): iter over array instead of assuming 1
+                    let frame_fill = obj.frame_fill(0).unwrap();
+                    if frame_fill.type_ == CDL_FrameFillType_t::CDL_FrameFill_FileData {
+                        total_space += frame_fill.get_file_data().filename().len() + 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        for &ut in self.untyped_slice() {
+            total_space += ut.num * size_of::<CDL_ObjID>();
+        }
+        total_space
     }
 }
