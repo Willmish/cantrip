@@ -1,6 +1,6 @@
 # Project Shodan: KataOS
 
-Shodan is a project to build a low-power secure embeded platform
+Shodan is a project to build a low-power secure embedded platform
 for Ambient ML applications. The target platform leverages
 [RISC-V](https://riscv.org/) and [OpenTitan](https://opentitan.org/).
 
