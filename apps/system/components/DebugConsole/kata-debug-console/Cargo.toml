@@ -18,14 +18,21 @@ version = "0.1.0"
 authors = ["Matt Harvey <mattharvey@google.com>"]
 edition = "2021"
 description = "Kata OS DebugConsole"
+build = "build.rs"
+
+[build-dependencies]
+sel4-config = { path = "../../kata-os-common/src/sel4-config" }
 
 [features]
 default = [
     "autostart_support",
-    "shodan_uart_support",
+    "CONFIG_PLAT_SHODAN",
 ]
-shodan_uart_support = ["kata-uart-client"]
 autostart_support = ["default-uart-client"]
+# Target platform support
+CONFIG_PLAT_BCM2837 = []
+# TODO(sleffler): not working when this comes from build.rs
+CONFIG_PLAT_SHODAN = ["kata-uart-client"]
 # Log level is Info unless LOG_DEBUG or LOG_TRACE are specified
 LOG_DEBUG = []
 LOG_TRACE = []

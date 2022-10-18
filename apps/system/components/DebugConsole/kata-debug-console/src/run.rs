@@ -58,10 +58,10 @@ pub unsafe extern "C" fn pre_init() {
 // Returns a trait-compatible Tx based on the selected features.
 // NB: must use "return expr;" to avoid confusing the compiler.
 fn get_tx() -> impl kata_io::Write {
-    #[cfg(feature = "shodan_uart_support")]
+    #[cfg(feature = "CONFIG_PLAT_SHODAN")]
     return kata_uart_client::Tx::new();
 
-    #[cfg(not(feature = "shodan_uart_support"))]
+    #[cfg(not(feature = "CONFIG_PLAT_SHODAN"))]
     return default_uart_client::Tx::new();
 }
 
@@ -112,7 +112,7 @@ fn run_autostart_shell(cpio_archive_ref: &[u8]) {
 }
 
 // Runs an interactive shell using the Shodan UART.
-#[cfg(feature = "shodan_uart_support")]
+#[cfg(feature = "CONFIG_PLAT_SHODAN")]
 fn run_shodan_shell(cpio_archive_ref: &[u8]) -> ! {
     let mut tx = kata_uart_client::Tx::new();
     let mut rx = kata_io::BufReader::new(kata_uart_client::Rx::new());
@@ -131,6 +131,6 @@ pub extern "C" fn run() {
     #[cfg(feature = "autostart_support")]
     run_autostart_shell(cpio_archive_ref);
 
-    #[cfg(feature = "shodan_uart_support")]
+    #[cfg(feature = "CONFIG_PLAT_SHODAN")]
     run_shodan_shell(cpio_archive_ref);
 }
