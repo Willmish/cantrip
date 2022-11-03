@@ -16,11 +16,25 @@
 name = "kata-sdk-runtime"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
+
+[build-dependencies]
+sel4-config = { path = "../../kata-os-common/src/sel4-config" }
+
+[features]
+default = ["CONFIG_PLAT_SHODAN"]
+timer_support = ["kata-timer-interface"]
+# Target platform support
+CONFIG_PLAT_BCM2837 = []
+CONFIG_PLAT_SHODAN = ["timer_support"]
+
 
 [dependencies]
+cfg-if = "1.0"
 hashbrown = { version = "0.11", features = ["ahash-compile-time-rng"] }
 kata-os-common = { path = "../../kata-os-common" }
 kata-security-interface = { path = "../../SecurityCoordinator/kata-security-interface" }
+kata-timer-interface = { path = "../../TimerService/kata-timer-interface", optional = true }
 kata-sdk-manager = { path = "../kata-sdk-manager" }
 log = { version = "0.4", features = ["release_max_level_info"] }
 sdk-interface = { path = "../sdk-interface" }
