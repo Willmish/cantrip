@@ -21,9 +21,9 @@ use core::fmt::Write;
 
 use kata_io as io;
 
-use kata_timer_interface::timer_service_completed_timers;
-use kata_timer_interface::timer_service_oneshot;
-use kata_timer_interface::timer_service_wait;
+use kata_timer_interface::kata_timer_completed_timers;
+use kata_timer_interface::kata_timer_oneshot;
+use kata_timer_interface::kata_timer_wait;
 use kata_timer_interface::TimerServiceError;
 
 pub fn add_cmds(cmds: &mut HashMap<&str, CmdFn>) {
@@ -49,12 +49,10 @@ fn timer_async_command(
 
     writeln!(output, "Starting timer {} for {} ms.", id, time_ms)?;
 
-    match timer_service_oneshot(id, time_ms) {
+    match kata_timer_oneshot(id, time_ms) {
         TimerServiceError::TimerOk => (),
         _ => return Err(CommandError::BadArgs),
     }
-
-    timer_service_oneshot(id, time_ms);
 
     Ok(())
 }
@@ -73,12 +71,12 @@ fn timer_blocking_command(
     writeln!(output, "Blocking {} ms waiting for timer.", time_ms)?;
 
     // Set timer_id to 0, we don't need to use multiple timers here.
-    match timer_service_oneshot(0, time_ms) {
+    match kata_timer_oneshot(0, time_ms) {
         TimerServiceError::TimerOk => (),
         _ => return Err(CommandError::BadArgs),
     }
 
-    timer_service_wait();
+    kata_timer_wait();
 
     return Ok(writeln!(output, "Timer completed.")?);
 }
@@ -93,6 +91,6 @@ fn timer_completed_command(
     return Ok(writeln!(
         output,
         "Timers completed: {:#032b}",
-        timer_service_completed_timers()
+        kata_timer_completed_timers()
     )?);
 }

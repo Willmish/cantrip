@@ -234,9 +234,9 @@ fn sleep_command(
 
     // Set timer_id to 0, we don't need to use multiple timers here.
     use kata_timer_interface::*;
-    match timer_service_oneshot(0, time_ms) {
+    match kata_timer_oneshot(0, time_ms) {
         TimerServiceError::TimerOk => {
-            timer_service_wait();
+            kata_timer_wait();
             Ok(())
         }
         _ => Err(CommandError::BadArgs),
@@ -385,7 +385,7 @@ fn capscan_command(
         }
         #[cfg(feature = "timer_support")]
         Some("timer") => {
-            let _ = kata_timer_interface::timer_service_capscan();
+            let _ = kata_timer_interface::kata_timer_capscan();
         }
         Some(bundle_id) => {
             if let Err(e) = kata_proc_interface::kata_proc_ctrl_capscan_bundle(bundle_id) {

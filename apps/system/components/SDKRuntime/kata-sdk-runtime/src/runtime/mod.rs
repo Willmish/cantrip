@@ -27,10 +27,10 @@ use kata_security_interface::kata_security_read_key;
 use kata_security_interface::kata_security_write_key;
 cfg_if! {
     if #[cfg(feature = "timer_support")] {
-        use kata_timer_interface::timer_service_cancel;
-        use kata_timer_interface::timer_service_oneshot;
-        use kata_timer_interface::timer_service_periodic;
-        use kata_timer_interface::timer_service_wait;
+        use kata_timer_interface::kata_timer_cancel;
+        use kata_timer_interface::kata_timer_oneshot;
+        use kata_timer_interface::kata_timer_periodic;
+        use kata_timer_interface::kata_timer_wait;
         use kata_timer_interface::TimerServiceError;
     }
 }
@@ -219,7 +219,7 @@ impl SDKRuntimeInterface for SDKRuntime {
         match self.apps.get(&app_id) {
             Some(_) => {
                 #[cfg(feature = "timer_support")]
-                return map_timer_error(timer_service_oneshot(id, duration_ms));
+                return map_timer_error(kata_timer_oneshot(id, duration_ms));
 
                 #[cfg(not(feature = "timer_support"))]
                 Err(SDKError::NoPlatformSupport)
@@ -239,7 +239,7 @@ impl SDKRuntimeInterface for SDKRuntime {
         match self.apps.get(&app_id) {
             Some(_) => {
                 #[cfg(feature = "timer_support")]
-                return map_timer_error(timer_service_periodic(id, duration_ms));
+                return map_timer_error(kata_timer_periodic(id, duration_ms));
 
                 #[cfg(not(feature = "timer_support"))]
                 Err(SDKError::NoPlatformSupport)
@@ -254,7 +254,7 @@ impl SDKRuntimeInterface for SDKRuntime {
         match self.apps.get(&app_id) {
             Some(_) => {
                 #[cfg(feature = "timer_support")]
-                return map_timer_error(timer_service_cancel(id));
+                return map_timer_error(kata_timer_cancel(id));
 
                 #[cfg(not(feature = "timer_support"))]
                 Err(SDKError::NoPlatformSupport)
@@ -269,7 +269,7 @@ impl SDKRuntimeInterface for SDKRuntime {
         match self.apps.get(&app_id) {
             Some(_) => {
                 #[cfg(feature = "timer_support")]
-                return Ok(timer_service_wait() as TimerId); //XXX maybe add error code
+                return Ok(kata_timer_wait() as TimerId); //XXX maybe add error code
 
                 #[cfg(not(feature = "timer_support"))]
                 Err(SDKError::NoPlatformSupport)
