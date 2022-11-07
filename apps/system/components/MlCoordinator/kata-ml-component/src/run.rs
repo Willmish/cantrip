@@ -43,14 +43,17 @@ pub unsafe extern "C" fn mlcoord__init() { ML_COORD.lock().init(); }
 #[no_mangle]
 pub unsafe extern "C" fn run() {
     loop {
-        kata_timer_wait();
-        let completed = kata_timer_completed_timers();
-
+        let mut completed = kata_timer_wait().unwrap();
+        assert!(completed != 0);
         for i in 0..31 {
-            let idx: u32 = 1 << i;
-            if completed & idx != 0 {
+            let mask: TimerMask = 1 << i;
+            if completed & mask != 0 {
                 if let Err(e) = ML_COORD.lock().timer_completed(i as ModelIdx) {
                     error!("Error when trying to run periodic model: {:?}", e);
+                }
+                completed &= !mask;
+                if completed == 0 {
+                    break;
                 }
             }
         }

@@ -232,11 +232,10 @@ fn sleep_command(
     let time_str = args.next().ok_or(CommandError::BadArgs)?;
     let time_ms = time_str.parse::<u32>()?;
 
-    // Set timer_id to 0, we don't need to use multiple timers here.
     use kata_timer_interface::*;
     match kata_timer_oneshot(0, time_ms) {
-        TimerServiceError::TimerOk => {
-            kata_timer_wait();
+        Ok(_) => {
+            kata_timer_wait().map_err(|_| CommandError::IO)?;
             Ok(())
         }
         _ => Err(CommandError::BadArgs),
