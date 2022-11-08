@@ -19,13 +19,14 @@ edition = "2021"
 
 [features]
 CONFIG_PLAT_BCM2837 = []
-CONFIG_PLAT_SHODAN = []
+CONFIG_PLAT_SHODAN = ["opentitan-timer"]
 
 [dependencies]
 kata-os-common = { path = "../../kata-os-common" }
 kata-timer-interface = { path = "../kata-timer-interface" }
 kata-timer-service = { path = "../kata-timer-service" }
 log = { version = "0.4", features = ["release_max_level_info"] }
+opentitan-timer = { path = "../opentitan-timer", optional = true }
 
 [lib]
 name = "kata_timer_component"

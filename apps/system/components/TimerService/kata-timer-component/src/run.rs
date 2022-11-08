@@ -19,66 +19,59 @@
 use core::time::Duration;
 use kata_os_common::camkes::Camkes;
 use kata_os_common::sel4_sys::seL4_Word;
-use kata_timer_interface::{TimerId, TimerServiceError};
-use kata_timer_service::TIMER_SRV;
+use kata_timer_interface::TimerId;
+use kata_timer_interface::TimerInterface;
+use kata_timer_interface::TimerServiceError;
+use kata_timer_service::KataTimerService;
+
+extern "C" {
+    fn timer_get_sender_id() -> seL4_Word;
+}
 
 static mut CAMKES: Camkes = Camkes::new("TimerService");
+// NB: KATA_TIMER cannot be used before setup is completed with a call to init()
+static mut KATA_TIMER: KataTimerService = KataTimerService::empty();
 
 #[no_mangle]
 pub unsafe extern "C" fn pre_init() {
     static mut HEAP_MEMORY: [u8; 4 * 1024] = [0; 4 * 1024];
     CAMKES.pre_init(log::LevelFilter::Debug, &mut HEAP_MEMORY);
-}
 
-#[no_mangle]
-pub unsafe extern "C" fn timer__init() { TIMER_SRV.lock().init(); }
+    // Complete KATA_TIMER setup now that the global allocator is setup.
+    #[cfg(feature = "CONFIG_PLAT_SHODAN")]
+    KATA_TIMER.init(opentitan_timer::OtTimer);
 
-extern "C" {
-    fn timer_get_sender_id() -> seL4_Word;
+    #[cfg(not(feature = "CONFIG_PLAT_SHODAN"))]
+    panic!("TimerService enabled without hardware timer support!");
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn timer_completed_timers() -> u32 {
     let client_id = timer_get_sender_id();
     // XXX no way to pass error w/ current interface
-    return TIMER_SRV.lock().completed_timers(client_id).unwrap_or(0);
+    KATA_TIMER.completed_timers(client_id).unwrap_or(0)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn timer_oneshot(timer_id: TimerId, duration_ms: u32) -> TimerServiceError {
     let duration = Duration::from_millis(duration_ms as u64);
-    let is_periodic = false;
     let client_id = timer_get_sender_id();
-    match TIMER_SRV
-        .lock()
-        .add(client_id, timer_id, duration, is_periodic)
-    {
-        Err(e) => e,
-        Ok(()) => TimerServiceError::TimerOk,
-    }
+    KATA_TIMER.add_oneshot(client_id, timer_id, duration).into()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn timer_periodic(timer_id: TimerId, duration_ms: u32) -> TimerServiceError {
     let duration = Duration::from_millis(duration_ms as u64);
-    let is_periodic = true;
     let client_id = timer_get_sender_id();
-    match TIMER_SRV
-        .lock()
-        .add(client_id, timer_id, duration, is_periodic)
-    {
-        Err(e) => e,
-        Ok(()) => TimerServiceError::TimerOk,
-    }
+    KATA_TIMER
+        .add_periodic(client_id, timer_id, duration)
+        .into()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn timer_cancel(timer_id: TimerId) -> TimerServiceError {
     let client_id = timer_get_sender_id();
-    match TIMER_SRV.lock().cancel(client_id, timer_id) {
-        Err(e) => e,
-        Ok(()) => TimerServiceError::TimerOk,
-    }
+    KATA_TIMER.cancel(client_id, timer_id).into()
 }
 
 #[no_mangle]
@@ -86,7 +79,7 @@ pub unsafe extern "C" fn timer_interrupt_handle() {
     extern "C" {
         fn timer_interrupt_acknowledge() -> u32;
     }
-    TIMER_SRV.lock().service_interrupt();
+    KATA_TIMER.service_interrupt();
     assert!(timer_interrupt_acknowledge() == 0);
 }
 
