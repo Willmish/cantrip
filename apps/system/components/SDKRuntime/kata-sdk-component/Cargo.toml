@@ -23,6 +23,8 @@ sel4-config = { path = "../../kata-os-common/src/sel4-config" }
 
 [features]
 CONFIG_KERNEL_MCS = []
+CONFIG_PLAT_BCM2837 = []
+CONFIG_PLAT_SHODAN = []
 
 [dependencies]
 cstr_core = { version = "0.2.3", default-features = false }

@@ -17,6 +17,10 @@ name = "kata-memory-component"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+CONFIG_PLAT_BCM2837 = []
+CONFIG_PLAT_SHODAN = []
+
 [dependencies]
 kata-memory-interface = { path = "../kata-memory-interface" }
 kata-memory-manager = { path = "../kata-memory-manager" }

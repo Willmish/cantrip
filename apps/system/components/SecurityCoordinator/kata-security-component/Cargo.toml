@@ -17,6 +17,10 @@ name = "kata-security-component"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+CONFIG_PLAT_BCM2837 = []
+CONFIG_PLAT_SHODAN = []
+
 [dependencies]
 kata-os-common = { path = "../../kata-os-common" }
 kata-security-interface = { path = "../kata-security-interface" }
