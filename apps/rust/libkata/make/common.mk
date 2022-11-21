@@ -31,16 +31,16 @@ else
 endif
 
 ROOTDIR    ?= $(MYDIR)
-BUILD_ROOT ?= $(ROOTDIR)/out/kata/$(ARCH_PREFIX)/$(BUILD_TYPE)/apps/rust
+BUILD_ROOT ?= $(ROOTDIR)/out/cantrip/$(ARCH_PREFIX)/$(BUILD_TYPE)/apps/rust
 
 CC := $(ARCH_PREFIX)-gcc
 AS := $(ARCH_PREFIX)-as
 AR := $(ARCH_PREFIX)-ar
 LD := $(ARCH_PREFIX)-gcc
 
-KATA_RUST_VERSION ?= nightly-2021-11-05
+CANTRIP_RUST_VERSION ?= nightly-2021-11-05
 RUST_TARGET ?= unknown
-CARGO := cargo +${KATA_RUST_VERSION}
+CARGO := cargo +${CANTRIP_RUST_VERSION}
 
 CFLAGS := $(DEBUG) $(OPT) $(INCLUDES)
 CFLAGS += -march=$(ARCH) -mabi=$(ABI)

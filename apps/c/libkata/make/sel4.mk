@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-LIBSEL4_SRC ?= $(ROOTDIR)/kata/kernel/libsel4
-OUT_KATA    ?= $(OUT)/kata/$(ARCH_PREFIX)/$(BUILD_TYPE)
+LIBSEL4_SRC ?= $(ROOTDIR)/cantrip/kernel/libsel4
+OUT_KATA    ?= $(OUT)/cantrip/$(ARCH_PREFIX)/$(BUILD_TYPE)
 
 INCLUDES += -I$(LIBSEL4_SRC)/arch_include/$(BASE_ARCH_NAME)
 INCLUDES += -I$(LIBSEL4_SRC)/include

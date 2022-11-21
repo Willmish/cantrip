@@ -29,7 +29,7 @@ else
 endif
 
 ROOTDIR    ?= $(MYDIR)
-BUILD_ROOT ?= $(ROOTDIR)/out/kata/$(ARCH_PREFIX)/$(BUILD_TYPE)/apps
+BUILD_ROOT ?= $(ROOTDIR)/out/cantrip/$(ARCH_PREFIX)/$(BUILD_TYPE)/apps
 
 CC := $(ARCH_PREFIX)-gcc
 AS := $(ARCH_PREFIX)-as
