@@ -8,7 +8,7 @@ build = "build.rs"
 sel4-config = { path = "../sel4-config" }
 
 [build-env]
-SEL4_OUT_DIR = "${ROOTDIR}out/kata/kernel"
+SEL4_OUT_DIR = "${ROOTDIR}out/cantrip/kernel"
 
 [features]
 default = []

@@ -13,7 +13,7 @@ serde_yaml = "0.8"
 indexmap = "=1.8"
 
 [build-env]
-SEL4_OUT_DIR = "${ROOTDIR}out/kata/kernel"
+SEL4_OUT_DIR = "${ROOTDIR}out/cantrip/kernel"
 
 [features]
 default = [
