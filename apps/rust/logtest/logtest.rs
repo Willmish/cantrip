@@ -6,17 +6,17 @@
 #![no_std]
 #![no_main]
 
-// Demo hookup of kata-os-logger to sdk_log (eventually move to libkata).
+// Demo hookup of cantrip-os-logger to sdk_log (eventually move to libcantrip).
 
-extern crate libkata;
-use kata_os_common::allocator;
-use kata_os_common::logger::KataLogger;
+extern crate libcantrip;
+use cantrip_os_common::allocator;
+use cantrip_os_common::logger::CantripLogger;
 use log::{error, info};
 use sdk_interface::*;
 
-// Message output is sent through the kata-os-logger which calls logger_log
+// Message output is sent through the cantrip-os-logger which calls logger_log
 // to deliver data to the console. Redirect to the sdk.
-// TODO(sleffler): not being used for weak symbol ref in KataLogger
+// TODO(sleffler): not being used for weak symbol ref in CantripLogger
 #[no_mangle]
 pub extern "C" fn logger_log(_level: u8, msg: *const cstr_core::c_char) {
     if let Ok(str) = unsafe { cstr_core::CStr::from_ptr(msg) }.to_str() {
@@ -27,8 +27,8 @@ pub extern "C" fn logger_log(_level: u8, msg: *const cstr_core::c_char) {
 #[no_mangle]
 pub fn main() {
     // Setup logger; (XXX maybe belongs in the SDKRuntime)
-    static KATA_LOGGER: KataLogger = KataLogger;
-    log::set_logger(&KATA_LOGGER).unwrap();
+    static CANTRIP_LOGGER: CantripLogger = CantripLogger;
+    log::set_logger(&CANTRIP_LOGGER).unwrap();
     log::set_max_level(log::LevelFilter::Trace);
 
     // NB: only need the allocator for error formatting.

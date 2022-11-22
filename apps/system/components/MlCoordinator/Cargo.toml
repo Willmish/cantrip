@@ -16,12 +16,12 @@
 
 members = [
     "fake-vec-core",
-    "kata-ml-component",
-    "kata-ml-coordinator",
-    "kata-ml-interface",
-    "kata-ml-shared",
-    "kata-ml-support",
-    "kata-vec-core"
+    "cantrip-ml-component",
+    "cantrip-ml-coordinator",
+    "cantrip-ml-interface",
+    "cantrip-ml-shared",
+    "cantrip-ml-support",
+    "cantrip-vec-core"
 ]
 resolver = "2"
 

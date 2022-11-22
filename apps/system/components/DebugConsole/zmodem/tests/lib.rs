@@ -26,16 +26,16 @@ use std::result;
 use std::thread::{sleep, spawn};
 use std::time::*;
 
-extern crate kata_io;
+extern crate cantrip_io;
 
-fn forget_err(_e: std::io::Error) -> kata_io::Error { kata_io::Error {} }
+fn forget_err(_e: std::io::Error) -> cantrip_io::Error { cantrip_io::Error {} }
 
 struct ReadWrapper<R: std::io::Read> {
     r: R,
 }
 
-impl<R: std::io::Read> kata_io::Read for ReadWrapper<R> {
-    fn read(&mut self, buf: &mut [u8]) -> kata_io::Result<usize> {
+impl<R: std::io::Read> cantrip_io::Read for ReadWrapper<R> {
+    fn read(&mut self, buf: &mut [u8]) -> cantrip_io::Result<usize> {
         self.r.read(buf).map_err(forget_err)
     }
 }
@@ -44,30 +44,30 @@ struct WriteWrapper<W: std::io::Write> {
     w: W,
 }
 
-impl<W: std::io::Write> kata_io::Write for WriteWrapper<W> {
-    fn write(&mut self, buf: &[u8]) -> kata_io::Result<usize> {
+impl<W: std::io::Write> cantrip_io::Write for WriteWrapper<W> {
+    fn write(&mut self, buf: &[u8]) -> cantrip_io::Result<usize> {
         self.w.write(buf).map_err(forget_err)
     }
 
-    fn flush(&mut self) -> kata_io::Result<()> { self.w.flush().map_err(forget_err) }
+    fn flush(&mut self) -> cantrip_io::Result<()> { self.w.flush().map_err(forget_err) }
 }
 
 struct SendInput<T: std::io::Read + std::io::Seek> {
     t: T,
 }
 
-impl<T: std::io::Read + std::io::Seek> kata_io::Read for SendInput<T> {
-    fn read(&mut self, buf: &mut [u8]) -> kata_io::Result<usize> {
+impl<T: std::io::Read + std::io::Seek> cantrip_io::Read for SendInput<T> {
+    fn read(&mut self, buf: &mut [u8]) -> cantrip_io::Result<usize> {
         self.t.read(buf).map_err(forget_err)
     }
 }
 
-impl<T: std::io::Read + std::io::Seek> kata_io::Seek for SendInput<T> {
-    fn seek(&mut self, pos: kata_io::SeekFrom) -> kata_io::Result<u64> {
+impl<T: std::io::Read + std::io::Seek> cantrip_io::Seek for SendInput<T> {
+    fn seek(&mut self, pos: cantrip_io::SeekFrom) -> cantrip_io::Result<u64> {
         let std_pos = match pos {
-            kata_io::SeekFrom::Start(n) => std::io::SeekFrom::Start(n),
-            kata_io::SeekFrom::End(n) => std::io::SeekFrom::End(n),
-            kata_io::SeekFrom::Current(n) => std::io::SeekFrom::Current(n),
+            cantrip_io::SeekFrom::Start(n) => std::io::SeekFrom::Start(n),
+            cantrip_io::SeekFrom::End(n) => std::io::SeekFrom::End(n),
+            cantrip_io::SeekFrom::Current(n) => std::io::SeekFrom::Current(n),
         };
         self.t.seek(std_pos).map_err(forget_err)
     }

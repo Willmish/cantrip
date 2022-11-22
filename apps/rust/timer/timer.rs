@@ -7,14 +7,14 @@
 #![no_main]
 
 extern crate alloc;
-extern crate libkata;
+extern crate libcantrip;
 use alloc::format;
-use kata_os_common::allocator;
-use kata_os_common::logger::KataLogger;
-use kata_os_common::sel4_sys;
+use cantrip_os_common::allocator;
+use cantrip_os_common::logger::CantripLogger;
+use cantrip_os_common::sel4_sys;
 use sdk_interface::*;
 
-// Message output is sent through the kata-os-logger which calls logger_log
+// Message output is sent through the cantrip-os-logger which calls logger_log
 // to deliver data to the console. We use seL4_DebugPutChar to write to the
 // console which only works if DEBUG_PRINTING is enabled in the kernel.
 #[no_mangle]
@@ -32,8 +32,8 @@ pub fn logger_log(_level: u8, msg: *const cstr_core::c_char) {
 #[no_mangle]
 pub fn main() {
     // Setup logger for panic; (XXX maybe belongs in the SDKRuntime)
-    static KATA_LOGGER: KataLogger = KataLogger;
-    log::set_logger(&KATA_LOGGER).unwrap();
+    static CANTRIP_LOGGER: CantripLogger = CantripLogger;
+    log::set_logger(&CANTRIP_LOGGER).unwrap();
     log::set_max_level(log::LevelFilter::Trace);
 
     static mut HEAP: [u8; 4096] = [0; 4096];

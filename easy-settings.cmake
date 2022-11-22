@@ -29,7 +29,7 @@ endif()
 
 set(CAMKES_APP "system" CACHE STRING "The one and only CAmkES application in this project")
 #set(CAPDL_LOADER_APP "capdl-loader-app" CACHE STRING "")
-set(CAPDL_LOADER_APP "kata-os-rootserver" CACHE STRING "")
+set(CAPDL_LOADER_APP "cantrip-os-rootserver" CACHE STRING "")
 
 set(KernelIsMCS ON CACHE BOOL "Enable seL4 MCS support")
 set(KernelPrinting ON CACHE BOOL "Enable seL4 console output support")

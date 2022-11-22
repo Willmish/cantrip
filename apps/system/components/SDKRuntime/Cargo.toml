@@ -15,9 +15,9 @@
 [workspace]
 
 members = [
-    "kata-sdk-component",
-    "kata-sdk-manager",
-    "kata-sdk-runtime",
+    "cantrip-sdk-component",
+    "cantrip-sdk-manager",
+    "cantrip-sdk-runtime",
 
     "sdk-interface",
 ]

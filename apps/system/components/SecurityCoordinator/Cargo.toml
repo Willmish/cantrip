@@ -15,9 +15,9 @@
 [workspace]
 
 members = [
-    "kata-security-component",
-    "kata-security-coordinator",
-    "kata-security-interface",
+    "cantrip-security-component",
+    "cantrip-security-coordinator",
+    "cantrip-security-interface",
 ]
 resolver = "2"
 

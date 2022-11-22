@@ -15,7 +15,7 @@
 // These are currently quick and dirty tests with a minimal "framework." When
 // adding new tests, be sure to add a TEST(...); declaration to main().
 
-// TODO(mattharvey): Determine how to do unit testing within the kata build
+// TODO(mattharvey): Determine how to do unit testing within the cantrip build
 // system and port this to that framework.
 
 #define TEST(X)         \

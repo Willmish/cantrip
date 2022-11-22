@@ -15,9 +15,9 @@
 [workspace]
 
 members = [
-    "kata-proc-component",
-    "kata-proc-interface",
-    "kata-proc-manager",
+    "cantrip-proc-component",
+    "cantrip-proc-interface",
+    "cantrip-proc-manager",
 ]
 resolver = "2"
 

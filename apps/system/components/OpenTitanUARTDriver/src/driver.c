@@ -18,11 +18,11 @@
 #include "opentitan/uart.h"
 #include "uart_driver_error.h"
 
-// NB: KATA_ASSERTs preserve expr when not checking
+// NB: CANTRIP_ASSERTs preserve expr when not checking
 #ifdef CONFIG_DEBUG_BUILD
-#define KATA_ASSERT(expr) assert(expr)
+#define CANTRIP_ASSERT(expr) assert(expr)
 #else
-#define KATA_ASSERT(expr) ((void)(expr))
+#define CANTRIP_ASSERT(expr) ((void)(expr))
 #endif
 
 // Referenced by macros in the generated file opentitan/uart.h.
@@ -56,8 +56,8 @@
   ((value & UART_##regname##_##subfield##_MASK)     \
    << UART_##regname##_##subfield##_OFFSET)
 
-#define LOCK(lockname) KATA_ASSERT(lockname##_lock() == 0)
-#define UNLOCK(lockname) KATA_ASSERT(lockname##_unlock() == 0)
+#define LOCK(lockname) CANTRIP_ASSERT(lockname##_lock() == 0)
+#define UNLOCK(lockname) CANTRIP_ASSERT(lockname##_unlock() == 0)
 #define ASSERT_OR_RETURN(x)            \
   if (!(bool)(x)) {                    \
     return UARTDriver_AssertionFailed; \
@@ -192,13 +192,13 @@ int read_read(size_t limit) {
   LOCK(rx_mutex);
   while (circular_buffer_empty(&rx_buf)) {
     UNLOCK(rx_mutex);
-    KATA_ASSERT(rx_nonempty_semaphore_wait() == 0);
+    CANTRIP_ASSERT(rx_nonempty_semaphore_wait() == 0);
     LOCK(rx_mutex);
   }
   while (cursor < cursor_limit) {
     if (!circular_buffer_pop_front(&rx_buf, cursor)) {
       // The buffer is empty.
-      KATA_ASSERT(rx_empty_semaphore_post() == 0);
+      CANTRIP_ASSERT(rx_empty_semaphore_post() == 0);
       break;
     }
     ++cursor;
@@ -271,7 +271,7 @@ void tx_watermark_handle(void) {
   // flushed out.
   REG(INTR_STATE) = BIT(UART_INTR_STATE_TX_WATERMARK_BIT);
 
-  KATA_ASSERT(tx_watermark_acknowledge() == 0);
+  CANTRIP_ASSERT(tx_watermark_acknowledge() == 0);
 }
 
 // Handles an rx_watermark interrupt.
@@ -290,24 +290,24 @@ void rx_watermark_handle(void) {
       // RX FIFO is empty, since the rx_watermark interrupt will not fire again
       // until the RX FIFO level crosses from 0 to 1. Therefore we unblock any
       // pending reads and wait for enough reads to consume all of rx_buf.
-      KATA_ASSERT(rx_nonempty_semaphore_post() == 0);
+      CANTRIP_ASSERT(rx_nonempty_semaphore_post() == 0);
       UNLOCK(rx_mutex);
-      KATA_ASSERT(rx_empty_semaphore_wait() == 0);
+      CANTRIP_ASSERT(rx_empty_semaphore_wait() == 0);
       LOCK(rx_mutex);
       continue;
     }
     size_t to_read = rx_fifo_level();
     to_read = to_read > buffer_remaining ? buffer_remaining : to_read;
     while(to_read--) {
-      KATA_ASSERT(circular_buffer_push_back(&rx_buf, uart_getchar()));
+      CANTRIP_ASSERT(circular_buffer_push_back(&rx_buf, uart_getchar()));
     }
   }
-  KATA_ASSERT(rx_nonempty_semaphore_post() == 0);
+  CANTRIP_ASSERT(rx_nonempty_semaphore_post() == 0);
   UNLOCK(rx_mutex);
 
   // Clears INTR_STATE for rx_watermark. (INTR_STATE is write-1-to-clear.)
   REG(INTR_STATE) = BIT(UART_INTR_STATE_RX_WATERMARK_BIT);
-  KATA_ASSERT(rx_watermark_acknowledge() == 0);
+  CANTRIP_ASSERT(rx_watermark_acknowledge() == 0);
 }
 
 // Handles a tx_empty interrupt.
@@ -327,5 +327,5 @@ void tx_empty_handle(void) {
     REG(INTR_STATE) = BIT(UART_INTR_STATE_TX_EMPTY_BIT);
   }
   UNLOCK(tx_mutex);
-  KATA_ASSERT(tx_empty_acknowledge() == 0);
+  CANTRIP_ASSERT(tx_empty_acknowledge() == 0);
 }

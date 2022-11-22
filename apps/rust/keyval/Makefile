@@ -14,5 +14,5 @@
 
 APPNAME := keyval
 
-LIBKATA ?= ../libkata
-include ${LIBKATA}/make/app.mk
+LIBCANTRIP ?= ../libcantrip
+include ${LIBCANTRIP}/make/app.mk

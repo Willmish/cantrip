@@ -15,7 +15,7 @@
 use alloc::vec::Vec;
 use core::str::from_utf8;
 
-use kata_io as io;
+use cantrip_io as io;
 
 use consts::*;
 use frame::*;

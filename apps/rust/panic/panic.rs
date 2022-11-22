@@ -8,11 +8,11 @@
 
 // This file is a minimal test application to check panic's WAI.
 
-extern crate libkata;
-use kata_os_common::logger::KataLogger;
-use kata_os_common::sel4_sys;
+extern crate libcantrip;
+use cantrip_os_common::logger::CantripLogger;
+use cantrip_os_common::sel4_sys;
 
-// Message output is sent through the kata-os-logger which calls logger_log
+// Message output is sent through the cantrip-os-logger which calls logger_log
 // to deliver data to the console. We use seL4_DebugPutChar to write to the
 // console which only works if DEBUG_PRINTING is enabled in the kernel.
 #[no_mangle]
@@ -29,8 +29,8 @@ pub fn logger_log(_level: u8, msg: *const cstr_core::c_char) {
 
 #[no_mangle]
 pub fn main() {
-    static KATA_LOGGER: KataLogger = KataLogger;
-    log::set_logger(&KATA_LOGGER).unwrap();
+    static CANTRIP_LOGGER: CantripLogger = CantripLogger;
+    log::set_logger(&CANTRIP_LOGGER).unwrap();
     log::set_max_level(log::LevelFilter::Trace);
 
     panic!("Goodbye, cruel world");

@@ -14,12 +14,12 @@
 
 #![no_std]
 
-// fake-vec-core is a stubbed out version of kata-vec-core.
+// fake-vec-core is a stubbed out version of cantrip-vec-core.
 extern crate alloc;
 
 use alloc::boxed::Box;
-use kata_io::Read;
-use kata_ml_shared::{OutputHeader, Permission, WindowId};
+use cantrip_io::Read;
+use cantrip_ml_shared::{OutputHeader, Permission, WindowId};
 
 pub fn enable_interrupts(_enable: bool) {}
 

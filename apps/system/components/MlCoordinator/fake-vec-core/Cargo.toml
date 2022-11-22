@@ -18,5 +18,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-kata-io = { path = "../../DebugConsole/kata-io" }
-kata-ml-shared = { path = "../kata-ml-shared" }
+cantrip-io = { path = "../../DebugConsole/cantrip-io" }
+cantrip-ml-shared = { path = "../cantrip-ml-shared" }

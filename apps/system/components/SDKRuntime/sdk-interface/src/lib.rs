@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! KataOS SDK application runtime interfaces.
+//! CantripOS SDK application runtime interfaces.
 
 #![cfg_attr(not(test), no_std)]
 
@@ -36,9 +36,9 @@ const PAGE_SIZE: usize = 1 << seL4_PageBits;
 // TODO(sleffler): is 1 page enough? ProcessManager should probably have
 //   SDKRuntime handle this
 extern "C" {
-    static KATA_SDK_ENDPOINT: seL4_CPtr; // IPC connection to SDKRuntime
-    static KATA_SDK_FRAME: seL4_CPtr; // RPC parameters frame
-    static KATA_SDK_PARAMS: *mut u8; // Virtual address of KATA_SDK_FRAME
+    static CANTRIP_SDK_ENDPOINT: seL4_CPtr; // IPC connection to SDKRuntime
+    static CANTRIP_SDK_FRAME: seL4_CPtr; // RPC parameters frame
+    static CANTRIP_SDK_PARAMS: *mut u8; // Virtual address of CANTRIP_SDK_FRAME
 }
 
 // Size of the buffers used to pass serialized data. The data structure
@@ -208,7 +208,7 @@ pub trait SDKRuntimeInterface {
 /// written to the label field of the reply. For the moment this uses
 /// postcard for serde work; this may change in the future (e.g. to flatbuffers).
 ///
-/// The caller is responsible for synchronizing access to KATA_SDK_* state
+/// The caller is responsible for synchronizing access to CANTRIP_SDK_* state
 /// and the IPC buffer.
 //
 // TODO(sleffler): this attaches the call params to the IPC; might be
@@ -222,7 +222,7 @@ fn sdk_request<'a, S: Serialize, D: Deserialize<'a>>(
     request: SDKRuntimeRequest,
     request_args: &S,
 ) -> Result<D, SDKRuntimeError> {
-    let params_slice = unsafe { core::slice::from_raw_parts_mut(KATA_SDK_PARAMS, PAGE_SIZE) };
+    let params_slice = unsafe { core::slice::from_raw_parts_mut(CANTRIP_SDK_PARAMS, PAGE_SIZE) };
 
     // NB: server-side must do the same split
     let (request_slice, reply_slice) = params_slice.split_at_mut(SDKRUNTIME_REQUEST_DATA_SIZE);
@@ -234,9 +234,9 @@ fn sdk_request<'a, S: Serialize, D: Deserialize<'a>>(
 
     // Attach params & call the SDKRuntime; then wait (block) for a reply.
     unsafe {
-        seL4_SetCap(0, KATA_SDK_FRAME);
+        seL4_SetCap(0, CANTRIP_SDK_FRAME);
         let info = seL4_Call(
-            KATA_SDK_ENDPOINT,
+            CANTRIP_SDK_ENDPOINT,
             seL4_MessageInfo::new(
                 /*label=*/ request.into(),
                 /*capsUnrapped=*/ 0,

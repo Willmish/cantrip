@@ -1,11 +1,11 @@
 #include <model/statedata.h>
 #include <object/structures.h>
 
-/* Dual-domain schedule for Kata to isolate third party applications from system
- * applications.
+/* Dual-domain schedule for Cantrip to isolate third party applications from
+ * system applications.
  *
  * Note that this doesn't actually implement the schedule -- that's hardwired in
- * seL4's kernel source. See also kata/kernel/src/kernel/thread.c, in the
+ * seL4's kernel source. See also cantrip/kernel/src/kernel/thread.c, in the
  * nextDomain function around line 302 and the timerTick function around 630.
  *
  * Effectively this is a round-robin scheduler, so half of the CPU time is given

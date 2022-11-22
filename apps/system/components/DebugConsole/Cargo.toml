@@ -16,11 +16,11 @@
 
 members = [
     "default-uart-client",
-    "kata-debug-console",
-    "kata-io",
-    "kata-line-reader",
-    "kata-shell",
-    "kata-uart-client",
+    "cantrip-debug-console",
+    "cantrip-io",
+    "cantrip-line-reader",
+    "cantrip-shell",
+    "cantrip-uart-client",
     "zmodem",
 ]
 resolver = "2"

@@ -27,67 +27,67 @@ includeGlobalComponents()
 include(${CMAKE_CURRENT_LIST_DIR}/rust.cmake)
 
 # Note: the includes generated for each CAmkES component listed here are
-# generated separately from the CMake build scripts. See also build/kata.mk for
-# details, specifically the kata-component-headers target.
+# generated separately from the CMake build scripts. See also build/cantrip.mk for
+# details, specifically the cantrip-component-headers target.
 
 RustAddLibrary(
-  kata_debug_console
+  cantrip_debug_console
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/components/DebugConsole
-  LIB_FILENAME libkata_debug_console.a
+  LIB_FILENAME libcantrip_debug_console.a
 )
 
 DeclareCAmkESComponent(DebugConsole
-  LIBS kata_debug_console
+  LIBS cantrip_debug_console
   INCLUDES interfaces
-  $ENV{OUT}/kata/components
+  $ENV{OUT}/cantrip/components
 )
 
 RustAddLibrary(
-  kata_memory_manager
+  cantrip_memory_manager
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/components/MemoryManager
-  LIB_FILENAME libkata_memory_manager.a
+  LIB_FILENAME libcantrip_memory_manager.a
 )
 
 DeclareCAmkESComponent(MemoryManager
-  LIBS kata_memory_manager
+  LIBS cantrip_memory_manager
   INCLUDES interfaces
-  $ENV{OUT}/kata/components
+  $ENV{OUT}/cantrip/components
 )
 
 RustAddLibrary(
-  kata_process_manager
+  cantrip_process_manager
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/components/ProcessManager
-  LIB_FILENAME libkata_process_manager.a
+  LIB_FILENAME libcantrip_process_manager.a
 )
 
 DeclareCAmkESComponent(ProcessManager
-  LIBS kata_process_manager
+  LIBS cantrip_process_manager
   INCLUDES interfaces
-  $ENV{OUT}/kata/components
+  $ENV{OUT}/cantrip/components
 )
 
 RustAddLibrary(
-  kata_sdk_runtime
+  cantrip_sdk_runtime
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/components/SDKRuntime
-  LIB_FILENAME libkata_sdk_runtime.a
+  LIB_FILENAME libcantrip_sdk_runtime.a
 )
 
 DeclareCAmkESComponent(SDKRuntime
-  LIBS kata_sdk_runtime
+  LIBS cantrip_sdk_runtime
   INCLUDES interfaces
-  $ENV{OUT}/kata/components
+  $ENV{OUT}/cantrip/components
 )
 
 RustAddLibrary(
-  kata_security_coordinator
+  cantrip_security_coordinator
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/components/SecurityCoordinator
-  LIB_FILENAME libkata_security_coordinator.a
+  LIB_FILENAME libcantrip_security_coordinator.a
 )
 
 DeclareCAmkESComponent(SecurityCoordinator
-  LIBS kata_security_coordinator
+  LIBS cantrip_security_coordinator
   INCLUDES interfaces
-  $ENV{OUT}/kata/components
+  $ENV{OUT}/cantrip/components
 )
 
 # Platform-specific components (typically drivers)

@@ -15,9 +15,9 @@
 [workspace]
 
 members = [
-    "kata-timer-component",
-    "kata-timer-interface",
-    "kata-timer-service",
+    "cantrip-timer-component",
+    "cantrip-timer-interface",
+    "cantrip-timer-service",
     "opentitan-timer"
 ]
 resolver = "2"

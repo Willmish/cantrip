@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use kata_io as io;
+use cantrip_io as io;
 
 use consts::*;
 use frame::*;

@@ -13,28 +13,28 @@
 # limitations under the License.
 
 RustAddLibrary(
-  kata_ml_coordinator
+  cantrip_ml_coordinator
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../../components/MlCoordinator
-  LIB_FILENAME libkata_ml_component.a
+  LIB_FILENAME libcantrip_ml_component.a
 )
 
 DeclareCAmkESComponent(
   MlCoordinator
-  LIBS kata_ml_coordinator
+  LIBS cantrip_ml_coordinator
   INCLUDES interfaces
-  $ENV{OUT}/kata/components
+  $ENV{OUT}/cantrip/components
 )
 
 RustAddLibrary(
-  kata_timer_service
+  cantrip_timer_service
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../../components/TimerService
-  LIB_FILENAME libkata_timer_component.a
+  LIB_FILENAME libcantrip_timer_component.a
 )
 
 DeclareCAmkESComponent(TimerService
-  LIBS kata_timer_service
+  LIBS cantrip_timer_service
   INCLUDES interfaces
-  $ENV{OUT}/kata/components
+  $ENV{OUT}/cantrip/components
 )
 
 RustAddLibrary(
@@ -47,7 +47,7 @@ DeclareCAmkESComponent(
   MailboxDriver
   LIBS mailbox_driver
   INCLUDES interfaces
-  $ENV{OUT}/kata/components
+  $ENV{OUT}/cantrip/components
 )
 
 DeclareCAmkESComponent(
@@ -58,5 +58,5 @@ DeclareCAmkESComponent(
   INCLUDES
   ../../opentitan-gen/include
   ../../components/OpenTitanUARTDriver/include
-  $ENV{OUT}/kata/components
+  $ENV{OUT}/cantrip/components
 )

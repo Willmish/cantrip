@@ -1,7 +1,7 @@
-# KataOS System Component Model
+# CantripOS System Component Model
 
 This document lays out how we expect most components to be constructed in the
-KataOS / CAmkES world. Note that we say "most" here, because not everything can
+CantripOS / CAmkES world. Note that we say "most" here, because not everything can
 be so dogmatic.
 
 In general, most of our components are divided into three crates: interface,
@@ -16,9 +16,9 @@ system/
 │  ├ SecurityCoordinator/
 │  │  ├ Cargo.toml
 │  │  ├ SecurityCoordinator.camkes
-│  │  ├ kata-security-component/
-│  │  ├ kata-security-coordinator/
-│  │  └ kata-security-interface/
+│  │  ├ cantrip-security-component/
+│  │  ├ cantrip-security-coordinator/
+│  │  └ cantrip-security-interface/
 │  ┆
 │
 ├ interfaces/

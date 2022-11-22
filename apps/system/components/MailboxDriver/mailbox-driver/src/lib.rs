@@ -18,7 +18,7 @@
 #![allow(non_snake_case)]
 #![allow(clippy::missing_safety_doc)]
 
-use kata_os_common::logger::KataLogger;
+use cantrip_os_common::logger::CantripLogger;
 use log::{error, trace};
 
 //------------------------------------------------------------------------------
@@ -149,8 +149,8 @@ fn drain_read_fifo() {
 
 #[no_mangle]
 pub unsafe extern "C" fn pre_init() {
-    static KATA_LOGGER: KataLogger = KataLogger;
-    log::set_logger(&KATA_LOGGER).unwrap();
+    static CANTRIP_LOGGER: CantripLogger = CantripLogger;
+    log::set_logger(&CANTRIP_LOGGER).unwrap();
     log::set_max_level(log::LevelFilter::Trace);
 
     // We always want our receive interrupt to fire as soon as anything appears

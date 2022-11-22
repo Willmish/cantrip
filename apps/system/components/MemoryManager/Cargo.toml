@@ -15,9 +15,9 @@
 [workspace]
 
 members = [
-    "kata-memory-component",
-    "kata-memory-interface",
-    "kata-memory-manager",
+    "cantrip-memory-component",
+    "cantrip-memory-interface",
+    "cantrip-memory-manager",
 ]
 resolver = "2"
 

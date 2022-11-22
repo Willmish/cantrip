@@ -15,7 +15,7 @@
 #![no_std]
 
 use core2::io::{Cursor, Read};
-use kata_io as io;
+use cantrip_io as io;
 
 /// Rx io trait that returns data from a byte string.
 pub struct Rx<'a> {

@@ -20,7 +20,7 @@ build = "build.rs"
 
 [build-dependencies]
 # build.rs depends on SEL4_OUT_DIR = "${ROOTDIR}/out/cantrip/kernel"
-sel4-config = { path = "../../system/components/kata-os-common/src/sel4-config" }
+sel4-config = { path = "../../system/components/cantrip-os-common/src/sel4-config" }
 
 [features]
 default = []
@@ -34,7 +34,7 @@ crate-type = ["staticlib"]
 
 [dependencies]
 cstr_core = { version = "0.2.3", default-features = false }
-kata-os-common = { path = "../../system/components/kata-os-common", default-features = false }
-libkata = { path = "../libkata" }
+cantrip-os-common = { path = "../../system/components/cantrip-os-common", default-features = false }
+libcantrip = { path = "../libcantrip" }
 log = "0.4"
 sdk-interface = { path = "../../system/components/SDKRuntime/sdk-interface" }

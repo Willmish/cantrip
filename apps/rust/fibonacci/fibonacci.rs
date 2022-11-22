@@ -14,9 +14,9 @@
 #![feature(asm)]
 
 extern crate alloc;
-extern crate libkata;
+extern crate libcantrip;
 use alloc::format;
-use kata_os_common::allocator;
+use cantrip_os_common::allocator;
 use sdk_interface::sdk_log;
 
 // How many Fibonacci numbers to write to the log.
