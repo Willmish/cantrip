@@ -9,7 +9,7 @@
 // using the seL4_DebugPutChar syscall and is intended as a starting
 // point for low-level tests.
 
-#include <kata.h>
+#include <cantrip.h>
 
 int main() {
   debug_printf("\nI am a C app!\n");

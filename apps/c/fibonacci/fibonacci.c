@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <kata.h>
+#include <cantrip.h>
 #include <stdint.h>
 
 // How many Fibonacci numbers to write to the log.

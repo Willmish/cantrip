@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-LIBKATA_DIR      := $(BUILD_ROOT)/libkata
-LIBKATA_INCLUDES := -I$(LIBKATA_DIR)/include
-LIBKATA_LIBS     := -L$(LIBKATA_DIR) -lkata
+LIBCANTRIP_DIR      := $(BUILD_ROOT)/libcantrip
+LIBCANTRIP_INCLUDES := -I$(LIBCANTRIP_DIR)/include
+LIBCANTRIP_LIBS     := -L$(LIBCANTRIP_DIR) -lcantrip

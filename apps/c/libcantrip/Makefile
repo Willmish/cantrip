@@ -22,9 +22,9 @@ SRC_FILES += \
 	globals.c
 
 INCLUDE_FILES := \
-	include/kata.h
+	include/cantrip.h
 
-BUILD_DIR      := $(BUILD_ROOT)/libkata
+BUILD_DIR      := $(BUILD_ROOT)/libcantrip
 BUILD_ARCH_DIR := $(BUILD_DIR)/arch/$(BUILD_ARCH)
 
 OBJ_FILES := $(patsubst arch/$(BUILD_ARCH)/%.S,$(BUILD_ARCH_DIR)/%.o,$(SRC_FILES))
@@ -32,7 +32,7 @@ OBJ_FILES := $(patsubst %.c,$(BUILD_DIR)/%.o,$(OBJ_FILES))
 
 ## Build Rules ###########################################
 
-$(BUILD_DIR)/libkata.a: $(BUILD_DIR) $(OBJ_FILES) includes
+$(BUILD_DIR)/libcantrip.a: $(BUILD_DIR) $(OBJ_FILES) includes
 	$(AR) rcs $@ $(OBJ_FILES)
 
 includes: $(INCLUDE_FILES)

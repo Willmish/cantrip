@@ -13,14 +13,14 @@
 # limitations under the License.
 
 LIBSEL4_SRC ?= $(ROOTDIR)/cantrip/kernel/libsel4
-OUT_KATA    ?= $(OUT)/cantrip/$(ARCH_PREFIX)/$(BUILD_TYPE)
+OUT_CANTRIP    ?= $(OUT)/cantrip/$(ARCH_PREFIX)/$(BUILD_TYPE)
 
 INCLUDES += -I$(LIBSEL4_SRC)/arch_include/$(BASE_ARCH_NAME)
 INCLUDES += -I$(LIBSEL4_SRC)/include
 INCLUDES += -I$(LIBSEL4_SRC)/mode_include/$(ARCH_BITS)
 INCLUDES += -I$(LIBSEL4_SRC)/sel4_arch_include/$(FULL_ARCH_NAME)
-INCLUDES += -I$(OUT_KATA)/kernel/gen_config
-INCLUDES += -I$(OUT_KATA)/libsel4/autoconf
-INCLUDES += -I$(OUT_KATA)/libsel4/gen_config/
-INCLUDES += -I$(OUT_KATA)/libsel4/include
-INCLUDES += -I$(OUT_KATA)/libsel4/sel4_arch_include/$(FULL_ARCH_NAME)
+INCLUDES += -I$(OUT_CANTRIP)/kernel/gen_config
+INCLUDES += -I$(OUT_CANTRIP)/libsel4/autoconf
+INCLUDES += -I$(OUT_CANTRIP)/libsel4/gen_config/
+INCLUDES += -I$(OUT_CANTRIP)/libsel4/include
+INCLUDES += -I$(OUT_CANTRIP)/libsel4/sel4_arch_include/$(FULL_ARCH_NAME)

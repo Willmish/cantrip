@@ -15,16 +15,16 @@
 MYDIR := $(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 
 include $(MYDIR)/common.mk
-include $(MYDIR)/libkata.mk
+include $(MYDIR)/libcantrip.mk
 
 BUILD_DIR     := $(BUILD_ROOT)/$(APPNAME)
 INTERMEDIATES := $(patsubst %.c,$(BUILD_DIR)/build/%.o,$(SOURCES))
 
-$(BUILD_DIR)/$(APPNAME).elf: $(INTERMEDIATES) $(BUILD_ROOT)/libkata/libkata.a | $(BUILD_DIR)
-	$(LD) $(LDFLAGS) -o $(BUILD_DIR)/$(APPNAME).elf $(INTERMEDIATES) $(LIBKATA_LIBS) -lgcc
+$(BUILD_DIR)/$(APPNAME).elf: $(INTERMEDIATES) $(BUILD_ROOT)/libcantrip/libcantrip.a | $(BUILD_DIR)
+	$(LD) $(LDFLAGS) -o $(BUILD_DIR)/$(APPNAME).elf $(INTERMEDIATES) $(LIBCANTRIP_LIBS) -lgcc
 
-$(BUILD_DIR)/build/%.o: %.c $(BUILD_ROOT)/libkata/libkata.a | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(LIBKATA_INCLUDES) -c -o $@ $<
+$(BUILD_DIR)/build/%.o: %.c $(BUILD_ROOT)/libcantrip/libcantrip.a | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(LIBCANTRIP_INCLUDES) -c -o $@ $<
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)/build
@@ -34,7 +34,7 @@ clean:
 
 .PHONY: clean
 
-## libkata build linkage
+## libcantrip build linkage
 
-$(BUILD_ROOT)/libkata/libkata.a:
+$(BUILD_ROOT)/libcantrip/libcantrip.a:
 	make -C $(MYDIR)/..

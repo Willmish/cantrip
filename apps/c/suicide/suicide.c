@@ -6,9 +6,9 @@
 
 // This file is a barebones, minimal-dependency test application that simply
 // derefrences a null pointer to kill itself. It's primary use case is to test
-// out KataOS' fault handlers.
+// out CantripOS' fault handlers.
 
-#include <kata.h>
+#include <cantrip.h>
 
 int main() {
   debug_printf("Goodbye, cruel world!\n");

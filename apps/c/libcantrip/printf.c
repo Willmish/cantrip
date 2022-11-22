@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <kata.h>
+#include <cantrip.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>

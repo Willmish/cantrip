@@ -12,8 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <kata.h>
+// NOLINT(build/header_guard)
+#ifndef CANTRIP_H
+#define CANTRIP_H
+
 #include <kernel/gen_config.h>
 #include <sel4/arch/syscalls.h>
+#include <stdarg.h>
 
-__thread seL4_IPCBuffer *__sel4_ipc_buffer;
+extern __thread seL4_IPCBuffer *__sel4_ipc_buffer;
+
+#ifdef CONFIG_PRINTING
+extern void _debug_printf(const char *fmt, ...);
+#define debug_printf(args...) \
+  do {                        \
+    _debug_printf(args);      \
+  } while (0)
+#else
+#define debug_printf(args...) \
+  do {                        \
+  } while (0)
+#warning Apps will not log to console because CONFIG_PRINTING is not defined!
+#endif  // CONFIG_PRINTING
+
+#endif  // CANTRIP_H
