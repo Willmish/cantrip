@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Kata OS ProcessManager services.
+// Cantrip OS ProcessManager services.
 
 import <LoggerInterface.camkes>;
 import <MemoryInterface.camkes>;
@@ -30,8 +30,8 @@ component ProcessManager {
   uses SecurityCoordinatorInterface security;
   uses SDKManagerInterface sdk_manager;
 
-  // Enable KataOS CAmkES support.
-  attribute int kataos = true;
+  // Enable CantripOS CAmkES support.
+  attribute int cantripos = true;
 
   // Process creation requires enough slots to hold dynamically
   // allocated memory when constructing the application. This

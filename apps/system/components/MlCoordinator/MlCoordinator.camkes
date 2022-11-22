@@ -37,8 +37,8 @@ component MlCoordinator {
   uses MemoryInterface memory;
   uses SecurityCoordinatorInterface security;
 
-  // Enable KataOS CAmkES support.
-  attribute int kataos = true;
+  // Enable CantripOS CAmkES support.
+  attribute int cantripos = true;
 
   // Copyregion for loading bundle images
   has copyregion BUNDLE_IMAGE;

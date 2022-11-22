@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Kata OS SecurityCoordinator services.
+// Cantrip OS SecurityCoordinator services.
 
 import <LoggerInterface.camkes>;
 import <MemoryInterface.camkes>;
@@ -26,8 +26,8 @@ component SecurityCoordinator {
   uses MemoryInterface memory;
   maybe uses MailboxAPI mailbox_api;
 
-  // Enable KataOS CAmkES support.
-  attribute int kataos = true;
+  // Enable CantripOS CAmkES support.
+  attribute int cantripos = true;
 
   // Add free slots for processing requests.
   attribute int cnode_headroom = 32;

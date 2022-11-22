@@ -50,8 +50,8 @@ component DebugConsole {
   maybe dataport Buf rx_dataport;
   maybe uses rust_read_inf uart_read;
 
-  // Enable KataOS CAmkES support.
-  attribute int kataos = true;
+  // Enable CantripOS CAmkES support.
+  attribute int cantripos = true;
 
   // Install requires enough slots to hold dynamically allocated
   // memory for package contents. Size this to handle up to 4MB

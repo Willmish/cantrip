@@ -22,6 +22,6 @@ component TimerService {
 
   maybe uses LoggerInterface logger;
 
-  // Enable KataOS CAmkES support.
-  attribute int kataos = true;
+  // Enable CantripOS CAmkES support.
+  attribute int cantripos = true;
 }

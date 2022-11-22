@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Kata OS MemoryManager service.
+// Cantrip OS MemoryManager service.
 
 import <LoggerInterface.camkes>;
 import <MemoryInterface.camkes>;
@@ -22,8 +22,8 @@ component MemoryManager {
 
   maybe uses LoggerInterface logger;
 
-  // Enable KataOS CAmkES support.
-  attribute int kataos = true;
+  // Enable CantripOS CAmkES support.
+  attribute int cantripos = true;
 
   // Mark the component that should receive the unallocated UntypedMemory
   // passed to the rootserver from the kernel. In addition to the

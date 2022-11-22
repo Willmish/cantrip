@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// KataOS SDKRuntime services.
+// CantripOS SDKRuntime services.
 
 import <LoggerInterface.camkes>;
 import <MemoryInterface.camkes>;
@@ -29,8 +29,8 @@ component SDKRuntime {
   uses SecurityCoordinatorInterface security;
   maybe uses Timer timer;
 
-  // Enable KataOS CAmkES support.
-  attribute int kataos = true;
+  // Enable CantripOS CAmkES support.
+  attribute int cantripos = true;
 
   // Add free slots for minting endpoints.
   attribute int cnode_headroom = 8;
