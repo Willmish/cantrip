@@ -50,17 +50,6 @@ DeclareCAmkESComponent(
   $ENV{OUT}/cantrip/components
 )
 
-DeclareCAmkESComponent(
-  OpenTitanUARTDriver
-  SOURCES
-  ../../components/OpenTitanUARTDriver/src/driver.c
-  ../../components/OpenTitanUARTDriver/src/circular_buffer.c
-  INCLUDES
-  ../../opentitan-gen/include
-  ../../components/OpenTitanUARTDriver/include
-  $ENV{OUT}/cantrip/components
-)
-
 RustAddLibrary(
   uart_driver
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../../components/UARTDriver
@@ -72,5 +61,5 @@ DeclareCAmkESComponent(UARTDriver
   INCLUDES
   interfaces
   opentitan-gen/include
-  $ENV{OUT}/kata/components
+  $ENV{OUT}/cantrip/components
 )
