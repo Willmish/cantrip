@@ -22,6 +22,7 @@ const LINE_MAX: usize = 128;
 
 pub enum LineReadError {
     IO(io::Error),
+    Overflow,
     Encoding(core::str::Utf8Error),
 }
 
@@ -37,9 +38,18 @@ impl fmt::Display for LineReadError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             LineReadError::IO(_) => write!(f, "IO error"),
+            LineReadError::Overflow => write!(f, "line too long"),
             LineReadError::Encoding(_) => write!(f, "bad character encoding"),
         }
     }
+}
+
+pub struct LineReader {
+    // Owned by LineReader to facilitate static allocation.
+    buf: [u8; LINE_MAX],
+}
+impl Default for LineReader {
+    fn default() -> Self { Self::new() }
 }
 
 fn get_u8(reader: &mut dyn io::Read) -> io::Result<u8> {
@@ -48,213 +58,11 @@ fn get_u8(reader: &mut dyn io::Read) -> io::Result<u8> {
     Ok(buf[0])
 }
 
-const CONTROL_A: u8 = 1u8; // Beginning of line
-const CONTROL_B: u8 = 2u8; // Move backward one char
-const CONTROL_D: u8 = 4u8; // Delete one char forward
-const CONTROL_E: u8 = 5u8; // End of line
-const CONTROL_F: u8 = 6u8; // Move forward one char
-const BACKSPACE: u8 = 8u8; // Delete previous character at point
-const CONTROL_K: u8 = 11u8; // Kill line from cursor forward
-const CONTROL_U: u8 = 21u8; // Delete entire command line
-const CONTROL_W: u8 = 23u8; // Delete previous word
-const DELETE: u8 = 127u8; // Doubles for backspace
-
-// Borrowed from the reference at
-// http://www.braun-home.net/michael/info/misc/VT100_commands.htm
-const BELL: u8 = 7u8;
-const ESC: u8 = 27u8;
-const VT100_SAVE_CURSOR: [u8; 3] = [ESC, b'[', b's'];
-const VT100_RESTORE_CURSOR: [u8; 3] = [ESC, b'[', b'u'];
-const VT100_ERASE_TO_EOL: [u8; 3] = [ESC, b'[', b'K'];
-const VT100_CURSOR_LEFT: [u8; 4] = [ESC, b'[', b'1', b'D'];
-const VT100_CURSOR_RIGHT: [u8; 4] = [ESC, b'[', b'1', b'C'];
-
-pub struct LineReader {
-    // Owned by LineReader to facilitate static allocation.
-    buf: [u8; LINE_MAX],
-
-    // Length of the last valid character in the buffer.
-    end: usize,
-
-    // Position of the cursor in the buffer.
-    point: usize,
-}
-
-impl Default for LineReader {
-    fn default() -> Self { Self::new() }
-}
-
 impl LineReader {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> LineReader {
+        LineReader {
             buf: [0u8; LINE_MAX],
-            end: 0,
-            point: 0,
         }
-    }
-
-    fn send_bell(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        output.write(&[BELL])?;
-        Ok(())
-    }
-
-    fn update_display(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        output.write(&VT100_ERASE_TO_EOL)?;
-        output.write(&self.buf[self.point..self.end])?;
-
-        // Go left the number of characters we just wrote to keep the cursor in place.
-        for _ in self.point..self.end {
-            // Use backspace since we expect backspace to be non-destructive, and it's faster
-            output.write(&[BACKSPACE])?;
-        }
-
-        Ok(())
-    }
-
-    fn delete_backward_char(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        // No text to delete
-        if self.end == 0 {
-            return self.send_bell(output);
-        }
-
-        // Point at the beginning -- nothing to delete.
-        if self.point == 0 {
-            output.write(&[BELL])?;
-            return Ok(());
-        }
-
-        self.buf.copy_within(self.point..self.end, self.point - 1);
-        self.end -= 1;
-        self.point -= 1;
-        output.write(&[BACKSPACE])?;
-
-        self.update_display(output)
-    }
-
-    fn delete_backward_word(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        // No text to delete
-        if self.end == 0 {
-            output.write(&[BELL])?;
-            return Ok(());
-        }
-
-        // Point at the beginning -- nothing to delete.
-        if self.point == 0 {
-            output.write(&[BELL])?;
-            return Ok(());
-        }
-
-        // If prior char is a space, skip it during the search
-        let search_start = match self.buf[self.point - 1] {
-            b' ' => self.point - 1,
-            _ => self.point,
-        };
-        let word_start = self.buf[0..search_start]
-            .iter()
-            .rposition(|&c| c == b' ')
-            .unwrap_or(0);
-        let word_len = self.point - word_start;
-
-        self.buf.copy_within(self.point..self.end, word_start);
-        self.end -= word_len;
-        self.point -= word_len;
-
-        for _ in 0..word_len {
-            output.write(&[BACKSPACE])?;
-        }
-
-        self.update_display(output)
-    }
-
-    fn delete_forward_char(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        // No text to delete
-        if self.end == 0 {
-            output.write(&[BELL])?;
-            return Ok(());
-        }
-
-        // At EoL, nothing to delete
-        if self.point >= self.end {
-            output.write(&[BELL])?;
-            return Ok(());
-        }
-
-        self.buf.copy_within(self.point + 1..self.end, self.point);
-        self.end -= 1;
-
-        self.update_display(output)
-    }
-
-    fn insert_char(&mut self, c: u8, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        if self.end >= LINE_MAX {
-            output.write(&[BELL])?;
-            return Ok(());
-        }
-
-        // If we're inserting in the middle or beginning of the string, we need
-        // to copy the buffer to the right by one.
-        if self.point < self.end {
-            self.buf.copy_within(self.point..self.end, self.point + 1);
-        }
-
-        self.buf[self.point] = c;
-        self.end += 1;
-        self.point += 1;
-
-        output.write(&[c])?;
-
-        self.update_display(output)
-    }
-
-    fn forward_point(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        if self.point >= self.end {
-            self.send_bell(output)
-        } else {
-            self.point += 1;
-            output.write(&VT100_CURSOR_RIGHT)?;
-            Ok(())
-        }
-    }
-
-    fn backward_point(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        if self.point == 0 {
-            self.send_bell(output)
-        } else {
-            self.point -= 1;
-            output.write(&VT100_CURSOR_LEFT)?;
-            Ok(())
-        }
-    }
-
-    fn beginning_of_line(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        self.point = 0;
-        output.write(&VT100_RESTORE_CURSOR)?;
-        Ok(())
-    }
-
-    fn end_of_line(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        for _ in self.point..self.end {
-            output.write(&VT100_CURSOR_RIGHT)?;
-        }
-
-        self.point = self.end;
-        Ok(())
-    }
-
-    fn kill_line_forward(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        self.end = self.point;
-        output.write(&VT100_ERASE_TO_EOL)?;
-        Ok(())
-    }
-
-    fn kill_line(&mut self, output: &mut dyn io::Write) -> Result<(), LineReadError> {
-        self.end = 0;
-        self.point = 0;
-
-        output.write(&VT100_RESTORE_CURSOR)?;
-        output.write(&VT100_ERASE_TO_EOL)?;
-
-        Ok(())
     }
 
     pub fn read_line(
@@ -262,44 +70,28 @@ impl LineReader {
         output: &mut dyn io::Write,
         input: &mut dyn io::Read,
     ) -> Result<&str, LineReadError> {
-        self.end = 0;
-        self.point = 0;
-
-        // Save our prompt position first
-        output.write(&VT100_SAVE_CURSOR)?;
-
-        loop {
-            match get_u8(input)? {
-                // Non-destructive editing keys
-                CONTROL_A => self.beginning_of_line(output)?,
-                CONTROL_E => self.end_of_line(output)?,
-                CONTROL_B => self.backward_point(output)?,
-                CONTROL_F => self.forward_point(output)?,
-
-                // Destructive editing keys
-                BACKSPACE => self.delete_backward_char(output)?,
-                DELETE => self.delete_backward_char(output)?,
-                CONTROL_D => self.delete_forward_char(output)?,
-                CONTROL_W => self.delete_backward_word(output)?,
-                CONTROL_K => self.kill_line_forward(output)?,
-                CONTROL_U => self.kill_line(output)?,
-
-                // Normal printable ASCII case
-                // 32 is space, 126 is ~
-                c @ 32u8..=126u8 => self.insert_char(c, output)?,
-
-                // Newline -- finish the loop.
-                b'\r' | b'\n' => break,
-
-                // Unprintable character, non-ASCII or edit keys
-                _ => (),
-            };
+        const DEL: u8 = 127u8;
+        const BACKSPACE: u8 = 8u8;
+        let mut len = 0;
+        while len < self.buf.len() {
+            let mut c = get_u8(input)?;
+            while c == DEL || c == BACKSPACE {
+                if len > 0 {
+                    output.write(&[BACKSPACE, b' ', BACKSPACE])?;
+                    len -= 1;
+                }
+                c = get_u8(input)?;
+            }
+            if c == b'\r' || c == b'\n' {
+                if len > 0 {
+                    output.write(&[b'\n'])?;
+                }
+                return Ok(core::str::from_utf8(&self.buf[0..len])?);
+            }
+            self.buf[len] = c;
+            len += 1;
+            output.write(&[c])?;
         }
-
-        if self.end > 0 {
-            output.write(&[b'\n'])?;
-        }
-
-        Ok(core::str::from_utf8(&self.buf[0..self.end])?)
+        Err(LineReadError::Overflow)
     }
 }
