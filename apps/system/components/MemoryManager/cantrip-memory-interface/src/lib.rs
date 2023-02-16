@@ -532,7 +532,7 @@ pub fn cantrip_untyped_alloc(space_bytes: usize) -> Result<ObjDescBundle, Memory
     );
     cantrip_object_alloc(&objs)?;
     objs.move_objects_to_toplevel()
-        .map_err(|_| MemoryManagerError::MmeObjCapInvalid)?;
+        .or(Err(MemoryManagerError::MmeObjCapInvalid))?;
     Ok(objs)
 }
 
@@ -545,7 +545,7 @@ pub fn cantrip_tcb_alloc() -> Result<ObjDescBundle, MemoryManagerError> {
     );
     cantrip_object_alloc(&objs)?;
     objs.move_objects_to_toplevel()
-        .map_err(|_| MemoryManagerError::MmeObjCapInvalid)?;
+        .or(Err(MemoryManagerError::MmeObjCapInvalid))?;
     Ok(objs)
 }
 
@@ -558,7 +558,7 @@ pub fn cantrip_endpoint_alloc() -> Result<ObjDescBundle, MemoryManagerError> {
     );
     cantrip_object_alloc(&objs)?;
     objs.move_objects_to_toplevel()
-        .map_err(|_| MemoryManagerError::MmeObjCapInvalid)?;
+        .or(Err(MemoryManagerError::MmeObjCapInvalid))?;
     Ok(objs)
 }
 
@@ -571,7 +571,7 @@ pub fn cantrip_notification_alloc() -> Result<ObjDescBundle, MemoryManagerError>
     );
     cantrip_object_alloc(&objs)?;
     objs.move_objects_to_toplevel()
-        .map_err(|_| MemoryManagerError::MmeObjCapInvalid)?;
+        .or(Err(MemoryManagerError::MmeObjCapInvalid))?;
     Ok(objs)
 }
 
@@ -589,7 +589,7 @@ pub fn cantrip_cnode_alloc(size_bits: usize) -> Result<ObjDescBundle, MemoryMana
     );
     cantrip_object_alloc(&objs)?;
     objs.move_objects_to_toplevel()
-        .map_err(|_| MemoryManagerError::MmeObjCapInvalid)?;
+        .or(Err(MemoryManagerError::MmeObjCapInvalid))?;
     Ok(objs)
 }
 
@@ -607,7 +607,7 @@ pub fn cantrip_sched_context_alloc(size_bits: usize) -> Result<ObjDescBundle, Me
     );
     cantrip_object_alloc(&objs)?;
     objs.move_objects_to_toplevel()
-        .map_err(|_| MemoryManagerError::MmeObjCapInvalid)?;
+        .or(Err(MemoryManagerError::MmeObjCapInvalid))?;
     Ok(objs)
 }
 
@@ -621,7 +621,7 @@ pub fn cantrip_reply_alloc() -> Result<ObjDescBundle, MemoryManagerError> {
     );
     cantrip_object_alloc(&objs)?;
     objs.move_objects_to_toplevel()
-        .map_err(|_| MemoryManagerError::MmeObjCapInvalid)?;
+        .or(Err(MemoryManagerError::MmeObjCapInvalid))?;
     Ok(objs)
 }
 
@@ -642,7 +642,7 @@ pub fn cantrip_frame_alloc(space_bytes: usize) -> Result<ObjDescBundle, MemoryMa
     );
     cantrip_object_alloc(&objs)?;
     objs.move_objects_to_toplevel()
-        .map_err(|_| MemoryManagerError::MmeObjCapInvalid)?;
+        .or(Err(MemoryManagerError::MmeObjCapInvalid))?;
     Ok(objs)
 }
 
@@ -681,7 +681,7 @@ pub fn cantrip_page_table_alloc() -> Result<ObjDescBundle, MemoryManagerError> {
     );
     cantrip_object_alloc(&objs)?;
     objs.move_objects_to_toplevel()
-        .map_err(|_| MemoryManagerError::MmeObjCapInvalid)?;
+        .or(Err(MemoryManagerError::MmeObjCapInvalid))?;
     Ok(objs)
 }
 
@@ -724,7 +724,7 @@ pub fn cantrip_object_free_toplevel(objs: &ObjDescBundle) -> Result<(), MemoryMa
         .move_objects_from_toplevel(unsafe { MEMORY_RECV_CNODE }, unsafe {
             MEMORY_RECV_CNODE_DEPTH
         })
-        .map_err(|_| MemoryManagerError::MmeObjCapInvalid)?;
+        .or(Err(MemoryManagerError::MmeObjCapInvalid))?;
     cantrip_object_free(&objs_mut)
 }
 
