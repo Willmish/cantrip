@@ -35,7 +35,8 @@ static mut SECURITY_RECV_SLOT: seL4_CPtr = 0;
 
 #[no_mangle]
 pub unsafe extern "C" fn pre_init() {
-    static mut HEAP_MEMORY: [u8; 8 * 1024] = [0; 8 * 1024];
+    const HEAP_SIZE: usize = 12 * 1024;
+    static mut HEAP_MEMORY: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
     // NB: set to max; the LoggerInterface will filter
     CAMKES.pre_init(log::LevelFilter::Trace, &mut HEAP_MEMORY);
 
