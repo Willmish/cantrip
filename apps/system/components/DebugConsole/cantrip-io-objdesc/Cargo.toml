@@ -12,32 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-[workspace]
+[package]
+name = "cantrip-io-objdesc"
+version = "0.1.0"
+edition = "2021"
 
-members = [
-    "cantrip-debug-console",
-    "cantrip-io",
-    "cantrip-io-objdesc",
-    "cantrip-line-reader",
-    "cantrip-shell",
-    "cantrip-uart-client",
-    "zmodem",
-]
-resolver = "2"
-
-[profile.dev]
-opt-level = 0
-debug = true
-# TODO(b/223253186): workaround gdb DIE errors
-lto = false
-codegen-units = 1
-
-[profile.release]
-opt-level = "z"
-lto = "fat"
-codegen-units = 1
-split-debuginfo = "unpacked"
-
-[profile.release.build-override]
-opt-level = "z"
-codegen-units = 1
+[dependencies]
+core2 = { version = "0.3", default-features = false }
+cantrip-io = { path = "../cantrip-io" }
+cantrip-memory-interface = { path = "../../MemoryManager/cantrip-memory-interface" }
+cantrip-os-common = { path = "../../cantrip-os-common" }
+log = "0.4"
