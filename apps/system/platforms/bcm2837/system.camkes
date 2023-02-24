@@ -37,8 +37,8 @@ assembly {
 
         component SDKRuntime sdk_runtime;
 
-        // Built-in CPIO archive is visible only to DebugConsole.
-        connection seL4HardwareMMIO cpio_archive(from debug_console.cpio_archive,
+        // Built-in CPIO archive is visible only to the SecurityCoordinator.
+        connection seL4HardwareMMIO cpio_archive(from security_coordinator.cpio_archive,
                                                  to cpio.cpio);
 
         // Hookup ProcessManager to DebugConsole for shell commands.

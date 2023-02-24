@@ -161,6 +161,21 @@ fn uninstall_request(
     unsafe { CANTRIP_SECURITY.uninstall(request.bundle_id) }
 }
 
+fn get_packages_request(
+    _request_buffer: &[u8],
+    reply_buffer: &mut [u8],
+) -> Result<(), SecurityRequestError> {
+    let bundle_ids = unsafe { CANTRIP_SECURITY.get_packages() }?;
+
+    trace!("GET PACKAGES -> {:?}", &bundle_ids);
+    // Serialize the bundle_id's in the result buffer. If we
+    // overflow the buffer, an error is returned and the
+    // contents are undefined (postcard does not specify).
+    let _ = postcard::to_slice(&GetPackagesResponse { bundle_ids }, reply_buffer)
+        .map_err(serialize_failure)?;
+    Ok(())
+}
+
 fn size_buffer_request(
     request_buffer: &[u8],
     reply_buffer: &mut [u8],
@@ -307,6 +322,7 @@ pub unsafe extern "C" fn security_request(
         SecurityRequest::SrInstallApp => install_app_request(request_buffer, reply_buffer),
         SecurityRequest::SrInstallModel => install_model_request(request_buffer, reply_buffer),
         SecurityRequest::SrUninstall => uninstall_request(request_buffer, reply_buffer),
+        SecurityRequest::SrGetPackages => get_packages_request(request_buffer, reply_buffer),
         SecurityRequest::SrSizeBuffer => size_buffer_request(request_buffer, reply_buffer),
         SecurityRequest::SrGetManifest => get_manifest_request(request_buffer, reply_buffer),
         SecurityRequest::SrLoadApplication => {

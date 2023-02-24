@@ -19,7 +19,7 @@ edition = "2021"
 
 [features]
 default = ["fake"]  # TODO(sleffler): sel4 once it exists
-fake = []
+fake = ["cpio"]
 sel4 = []
 
 [dependencies]
@@ -27,5 +27,6 @@ hashbrown = { version = "0.11", features = ["ahash-compile-time-rng"] }
 cantrip-memory-interface = { path = "../../MemoryManager/cantrip-memory-interface" }
 cantrip-os-common = { path = "../../cantrip-os-common" }
 cantrip-security-interface = { path = "../cantrip-security-interface" }
+cpio = { path = "../../../../../../../crates/cpio", optional = true }
 log = { version = "0.4", features = ["release_max_level_info"] }
 postcard = { version = "0.7", features = ["alloc"], default-features = false }
