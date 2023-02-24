@@ -156,9 +156,10 @@ assembly {
             from debug_console.proc_ctrl,    // NB: start, stop, etc
             to process_manager.proc_ctrl);
         // NB: this allocates a 4KB shared region to pass an ObjDescArray
-        connection seL4RPCOverMultiSharedData shell_package(
-            from debug_console.pkg_mgmt,     // NB: install* & uninstall
-            to process_manager.pkg_mgmt);
+// NB: requires dynamic_load_support, otherwise only builtins are available
+//        connection seL4RPCOverMultiSharedData shell_package(
+//            from debug_console.pkg_mgmt,     // NB: install* & uninstall
+//            to process_manager.pkg_mgmt);
 
         // MlCoordinator:
         connection seL4RPCCallSignal shell_ml(
@@ -259,6 +260,7 @@ assembly {
 
         process_manager._stack_size = 16*1024;
         process_manager.proc_ctrl_stack_size = 16*1024;
+        // NB: only meaningful with dynamic_load_support
         process_manager.pkg_mgmt_stack_size = 16*1024;
 
         ml_coordinator._stack_size = 16*1024;
