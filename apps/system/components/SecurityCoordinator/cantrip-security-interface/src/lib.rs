@@ -234,8 +234,9 @@ pub struct ReadKeyResponse {
     pub value: KeyValueData,
 }
 
-// Interface to underlying facilities; also used to inject fakes for unit tests.
+// Public api's.
 pub trait SecurityCoordinatorInterface {
+    // NB: deprecated
     fn install(&mut self, pkg_contents: &ObjDescBundle) -> Result<String, SecurityRequestError>;
     fn install_app(
         &mut self,
@@ -251,6 +252,7 @@ pub trait SecurityCoordinatorInterface {
     fn uninstall(&mut self, bundle_id: &str) -> Result<(), SecurityRequestError>;
     fn get_packages(&self) -> Result<BundleIdArray, SecurityRequestError>;
     fn size_buffer(&self, bundle_id: &str) -> Result<usize, SecurityRequestError>;
+    // NB: unimplemented
     fn get_manifest(&self, bundle_id: &str) -> Result<String, SecurityRequestError>;
     fn load_application(&mut self, bundle_id: &str) -> Result<ObjDescBundle, SecurityRequestError>;
     fn load_model(
@@ -266,7 +268,7 @@ pub trait SecurityCoordinatorInterface {
         value: &[u8],
     ) -> Result<(), SecurityRequestError>;
     fn delete_key(&mut self, bundle_id: &str, key: &str) -> Result<(), SecurityRequestError>;
-    fn test_mailbox(&mut self) -> Result<(), SecurityRequestError>;
+    fn test(&mut self) -> Result<(), SecurityRequestError>;
 }
 
 #[inline]

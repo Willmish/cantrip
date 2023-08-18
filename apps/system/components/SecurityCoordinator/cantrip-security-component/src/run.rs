@@ -27,7 +27,6 @@ use cantrip_os_common::cspace_slot::CSpaceSlot;
 use cantrip_os_common::logger;
 use cantrip_os_common::sel4_sys;
 use cantrip_security_coordinator::CantripSecurityCoordinator;
-use cantrip_security_coordinator::CantripSecurityCoordinatorInterface;
 use cantrip_security_interface::*;
 use log::trace;
 
@@ -45,13 +44,12 @@ use generated::*;
 // cantrip_security() is unsafe to use by multiple threads. As we assume the
 // caller/user is single-threaded, the function is not marked unsafe.
 fn cantrip_security() -> &'static mut impl SecurityCoordinatorInterface {
-    static mut CANTRIP_SECURITY: CantripSecurityCoordinator<CantripSecurityCoordinatorInterface> =
-        CantripSecurityCoordinator::empty();
+    static mut CANTRIP_SECURITY: Option<CantripSecurityCoordinator> = None;
     unsafe {
-        if CANTRIP_SECURITY.is_empty() {
-            CANTRIP_SECURITY.init(CantripSecurityCoordinatorInterface::new());
+        if CANTRIP_SECURITY.is_none() {
+            CANTRIP_SECURITY = Some(CantripSecurityCoordinator::new());
         }
-        CANTRIP_SECURITY.get()
+        CANTRIP_SECURITY.as_mut().unwrap()
     }
 }
 
@@ -293,7 +291,7 @@ impl SecurityInterfaceThread {
     fn test_mailbox_request() -> SecurityResult {
         let _cleanup = Camkes::cleanup_request_cap();
         trace!("TEST MAILBOX");
-        cantrip_security().test_mailbox().map(|_| None)
+        cantrip_security().test().map(|_| None)
     }
     fn capscan_request() -> SecurityResult {
         let _cleanup = Camkes::cleanup_request_cap();

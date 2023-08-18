@@ -18,9 +18,9 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["fake"]  # TODO(sleffler): sel4 once it exists
+default = ["fake"]
 fake = ["cpio"]
-sel4 = ["mailbox-interface"]
+sec = ["mailbox-interface"]
 
 [dependencies]
 hashbrown = { version = "0.11", features = ["ahash-compile-time-rng"] }
