@@ -15,6 +15,7 @@
 extern crate alloc;
 use alloc::vec;
 use cantrip_memory_interface::cantrip_frame_alloc;
+use cantrip_memory_interface::ObjDesc;
 use cantrip_memory_interface::ObjDescBundle;
 use cantrip_os_common::copyregion::CopyRegion;
 use cantrip_os_common::sel4_sys;
@@ -28,7 +29,9 @@ use sel4_sys::seL4_WordBits;
 pub enum UploadError {
     PageMap,
     PageUnmap,
-    Malloc,
+    MallocFailed,
+    MoveFailed,
+    ReadFailed,
 }
 
 extern "C" {
@@ -41,6 +44,7 @@ pub struct Upload<'a> {
     next_free: usize, // Next available byte in mapped frame
 }
 
+// XXX reclaim frames on drop; verify unmap happens
 impl<'a> Upload<'a> {
     pub fn new(region: &'a mut [u8]) -> Self {
         Self {
@@ -64,7 +68,7 @@ impl<'a> Upload<'a> {
     pub fn frames_mut(&mut self) -> &mut ObjDescBundle { &mut self.frames }
 
     // Unmap the current page and reset state.
-    fn unmap_current_frame(&mut self) -> Result<(), UploadError> {
+    pub fn unmap_current_frame(&mut self) -> Result<(), UploadError> {
         if self.frames.objs.last().is_some() {
             self.copyregion.unmap().or(Err(UploadError::PageUnmap))?;
         }
@@ -77,8 +81,9 @@ impl<'a> Upload<'a> {
     }
 
     // Expand storage and map the new frame into our VSpace.
-    fn expand_and_map(&mut self) -> Result<(), UploadError> {
-        let new_page = cantrip_frame_alloc(self.copyregion.size()).or(Err(UploadError::Malloc))?;
+    pub fn expand_and_map(&mut self) -> Result<&ObjDesc, UploadError> {
+        let new_page =
+            cantrip_frame_alloc(self.copyregion.size()).or(Err(UploadError::MallocFailed))?;
         // Verify the new frame is in the same CNode as previous.
         assert_eq!(new_page.cnode, self.frames.cnode);
         assert_eq!(new_page.depth, self.frames.depth);
@@ -89,7 +94,7 @@ impl<'a> Upload<'a> {
             .map(frame.cptr)
             .or(Err(UploadError::PageMap))?;
         self.next_free = 0;
-        Ok(())
+        Ok(frame)
     }
 
     pub fn write(&mut self, buf: &[u8]) -> Result<usize, UploadError> {

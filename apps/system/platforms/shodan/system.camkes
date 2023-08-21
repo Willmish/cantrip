@@ -23,7 +23,6 @@ import <MemoryManager/MemoryManager.camkes>;
 import <MlCoordinator/MlCoordinator.camkes>;
 import <SecurityCoordinator/SecurityCoordinator.camkes>;
 import <TimerService/TimerService.camkes>;
-import <MailboxDriver/MailboxDriver.camkes>;
 import <SDKRuntime/SDKRuntime.camkes>;
 
 component OpenTitanUART {
@@ -71,7 +70,6 @@ assembly {
         component BuiltinCpioArchive cpio;
 
         // Device hardware & drivers
-        component MailboxDriver mailbox_driver;
         component MailboxHardware mailbox_hardware;
         component OpenTitanTimer timer;
         component OpenTitanUART uart;
@@ -91,18 +89,18 @@ assembly {
         connection cantripMMIO cpio_archive(
             from security_coordinator.cpio_archive, to cpio.cpio);
 
-        // MailboxDriver
+        // MailboxDriver (part of SecurityCoordinator)
         connection cantripMMIO mailbox_driver_mmio(
-            from mailbox_driver.mailbox_mmio, to mailbox_hardware.mmio);
+            from security_coordinator.mailbox_mmio,
+            to mailbox_hardware.mmio);
         connection cantripIRQ mailbox_driver_irq(
             from mailbox_hardware.wtirq,
             from mailbox_hardware.eirq,
-            to mailbox_driver.irq);
+            to security_coordinator.irq);
         // NB: rtirq needs a dedicated thread for now
         connection cantripIRQ mailbox_driver_rtirq(
-            from mailbox_hardware.rtirq, to mailbox_driver.rtirq);
-        connection cantripRPCCall security_coordinator_to_mailbox_api(
-            from security_coordinator.api, to mailbox_driver.api);
+            from mailbox_hardware.rtirq,
+            to security_coordinator.rtirq);
 
         // OpenTitanUARTDriver
         connection cantripMMIO uart_mem(
@@ -115,7 +113,7 @@ assembly {
             from uart.tx_empty,
             to uart_driver.irq);
 
-        // VectorCoreDriver
+        // VectorCoreDriver (part of MlCoordinator)
         connection cantripMMIO vc_csr(
             from ml_coordinator.CSR, to vctop.CSR);
         connection cantripIRQ vctop_irq(
@@ -199,7 +197,6 @@ assembly {
             from memory_manager.logger,
             from security_coordinator.logger,
             from timer_service.logger,
-            from mailbox_driver.logger,
             from sdk_runtime.logger,
             from uart_driver.logger,
             to debug_console.logger);
@@ -220,7 +217,7 @@ assembly {
         mailbox_hardware.rtirq_irq_number = TOP_MATCHA_PLIC_IRQ_ID_TLUL_MAILBOX_SMC_RTIRQ;
         mailbox_hardware.eirq_irq_number = TOP_MATCHA_PLIC_IRQ_ID_TLUL_MAILBOX_SMC_EIRQ;
 
-        mailbox_driver.rx_semaphore_value = 0;
+        security_coordinator.rx_semaphore_value = 0; // XXX not honored
 
         uart.mmio_region_paddr = TOP_MATCHA_SMC_UART_BASE_ADDR;
         uart.mmio_region_size = TOP_MATCHA_SMC_UART_SIZE_BYTES;
@@ -264,11 +261,10 @@ assembly {
         ml_coordinator.mlcoord_stack_size = 16*1024;
         ml_coordinator.timer_stack_size = 8*1024; // NB: for debug build
         debug_console._stack_size = 16*1024;
+        security_coordinator.rtirq_stack_size = 8*1024; // NB: for debug build
         security_coordinator.security_stack_size = 16*1024;
 
         sdk_runtime._stack_size = 16*1024;
         sdk_runtime.sdk_manager_stack_size = 16*1024;
-
-        mailbox_driver.rtirq_stack_size = 8*1024; // NB: for debug build
     }
 }

@@ -53,7 +53,6 @@ fi
 
 declare -a CRATE_LIST=(
   apps/system/components/DebugConsole
-  apps/system/components/MailboxDriver
   apps/system/components/MemoryManager
   apps/system/components/MlCoordinator
   apps/system/components/ProcessManager

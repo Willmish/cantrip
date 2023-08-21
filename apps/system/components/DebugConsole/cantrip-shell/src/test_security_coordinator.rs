@@ -20,6 +20,7 @@ use crate::CommandError;
 use crate::HashMap;
 use alloc::vec::Vec;
 use core::fmt::Write;
+use core::mem::size_of;
 
 use cantrip_io as io;
 use cantrip_memory_interface::cantrip_object_free_in_cnode;
@@ -115,17 +116,23 @@ fn load_model_command(
 }
 
 fn test_mailbox_command(
-    _args: &mut dyn Iterator<Item = &str>,
+    args: &mut dyn Iterator<Item = &str>,
     _input: &mut dyn io::BufRead,
     output: &mut dyn io::Write,
 ) -> Result<(), CommandError> {
-    match cantrip_security_test_mailbox() {
-        Ok(_) => {
-            writeln!(output, "Test mailbox OK.")?;
-        }
-        Err(_status) => {
-            writeln!(output, "Test mailbox failed.")?;
-        }
+    let count_str = args.next().unwrap_or("17");
+    let count = count_str.parse::<usize>()?;
+    const MAX_WORDS: usize = 4096 / size_of::<u32>();
+    if !(1 < count && count <= MAX_WORDS) {
+        let _ = writeln!(
+            output,
+            "Invalid word count {count}, must be in the range [2..{MAX_WORDS}]"
+        );
+        return Ok(());
+    }
+    match cantrip_security_test(count) {
+        Ok(_) => writeln!(output, "OK")?,
+        Err(status) => writeln!(output, "{:?}", status)?,
     }
     Ok(())
 }

@@ -17,7 +17,6 @@
 use crate::BundleData;
 use crate::SecurityManagerInterface;
 use alloc::string::{String, ToString};
-use cantrip_memory_interface::ObjDescBundle;
 use cantrip_security_interface::*;
 use cpio::CpioNewcReader;
 use hashbrown::HashMap;
@@ -81,69 +80,50 @@ impl FakeSecurityManager {
 
 impl SecurityManagerInterface for FakeSecurityManager {
     // Returns an array of bundle id's from the builtin archive.
-    fn get_builtins(&self) -> BundleIdArray {
+    fn get_builtins(&self) -> Result<BundleIdArray, SecurityRequestError> {
         let mut builtins = BundleIdArray::new();
         for e in CpioNewcReader::new(unsafe { get_cpio_archive() }) {
             match e {
                 Err(err) => {
                     error!("cpio read err {:?}", err);
-                    break;
+                    return Err(SecurityRequestError::GetPackagesFailed);
                 }
                 Ok(entry) => builtins.push(entry.name.to_string()),
             }
         }
-        builtins
+        Ok(builtins)
     }
 
     // Returns a bundle backed by builtin data.
-    fn lookup_builtin(&self, filename: &str) -> Option<&'static [u8]> {
+    fn lookup_builtin(&self, filename: &str) -> Result<BundleData, SecurityRequestError> {
         for e in CpioNewcReader::new(unsafe { get_cpio_archive() }) {
             match e {
                 Err(err) => {
                     error!("cpio read err {:?}", err);
-                    break;
+                    return Err(SecurityRequestError::BundleNotFound);
                 }
                 Ok(entry) => {
                     if entry.name == filename {
-                        return Some(entry.data);
+                        return Ok(BundleData::new_from_flash(entry.data));
                     }
                 }
             }
         }
-        None
+        Err(SecurityRequestError::BundleNotFound)
     }
 
     fn uninstall(&mut self, bundle_id: &str) -> Result<(), SecurityRequestError> {
         self.remove_bundle(bundle_id)
     }
 
-    fn load_application(
-        &mut self,
-        bundle_id: &str,
-        bundle_data: &BundleData,
-    ) -> Result<ObjDescBundle, SecurityRequestError> {
-        // Clone everything (struct + associated seL4 objects) so the
-        // return is as though it was newly instantiated from flash.
-        let app_bundle = bundle_data
-            .deep_copy()
-            .or(Err(SecurityRequestError::LoadApplicationFailed))?;
-
+    fn load_application(&mut self, bundle_id: &str) -> Result<(), SecurityRequestError> {
         // Create an local entry for possible key ops. Note this persists
         // until the app is uninstall'd. If an app is loaded multiple
         // times w/o an uninstall this will replace any existing with a
         // new/empty hashmap.
         self.bundles
             .insert(bundle_id.to_string(), FakeBundleData::new());
-
-        Ok(app_bundle)
-    }
-
-    fn load_model(&self, model_data: &BundleData) -> Result<ObjDescBundle, SecurityRequestError> {
-        // Clone everything (struct + associated seL4 objects) so the
-        // return is as though it was newly instantiated from flash.
-        model_data
-            .deep_copy()
-            .or(Err(SecurityRequestError::LoadModelFailed))
+        Ok(())
     }
 
     // NB: key-value ops require a load'd application so only do get_bundle
@@ -172,6 +152,7 @@ impl SecurityManagerInterface for FakeSecurityManager {
         let _ = bundle.keys.remove(key);
         Ok(())
     }
-
-    fn test(&self) -> Result<(), SecurityRequestError> { Err(SecurityRequestError::TestFailed) }
+    fn test(&self, _count: usize) -> Result<(), SecurityRequestError> {
+        Err(SecurityRequestError::TestFailed)
+    }
 }

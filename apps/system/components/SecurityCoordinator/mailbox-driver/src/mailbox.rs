@@ -17,14 +17,17 @@
 use modular_bitfield::prelude::*;
 use reg_constants::mailbox::*;
 
-// NB: these assume MAILBOX_MMIO is visible in the top-level crate;
-// if not, then use get_mailbox_mmio()
 unsafe fn get_mbox(offset: usize) -> *const u32 {
-    crate::MAILBOX_MMIO.data.as_ptr().add(offset).cast::<u32>()
+    extern "Rust" {
+        fn get_mailbox_mmio() -> &'static [u8];
+    }
+    get_mailbox_mmio().as_ptr().add(offset).cast::<u32>()
 }
 unsafe fn get_mbox_mut(offset: usize) -> *mut u32 {
-    crate::MAILBOX_MMIO
-        .data
+    extern "Rust" {
+        fn get_mailbox_mmio_mut() -> &'static mut [u8];
+    }
+    get_mailbox_mmio_mut()
         .as_mut_ptr()
         .add(offset)
         .cast::<u32>()

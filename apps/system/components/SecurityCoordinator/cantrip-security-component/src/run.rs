@@ -28,6 +28,7 @@ use cantrip_os_common::logger;
 use cantrip_os_common::sel4_sys;
 use cantrip_security_coordinator::CantripSecurityCoordinator;
 use cantrip_security_interface::*;
+use cfg_if::cfg_if;
 use log::trace;
 
 use camkes::*;
@@ -65,6 +66,31 @@ impl CamkesThreadInterface for SecurityCoordinatorControlThread {
             CAMKES.pre_init(&mut HEAP_MEMORY);
         }
     }
+
+    cfg_if! {
+      if #[cfg(feature = "mailbox-driver")] {
+        // XXX HACK: compensate for rtirq not setup
+        fn post_init() { mailbox_driver::RtirqInterfaceThread::post_init(); }
+        fn run() {
+            // NB: do not handle rtirq, it blocks waiting for the api thread
+            shared_irq_loop!(
+                irq,
+                wtirq => mailbox_driver::WtirqInterfaceThread::handler,
+                eirq => mailbox_driver::EirqInterfaceThread::handler
+            );
+        }
+      }
+    }
+}
+
+cfg_if! {
+  if #[cfg(feature = "mailbox-driver")] {
+    // RTIRQ: interrupt for inbox.count > read_threshold.
+    struct RtirqInterfaceThread;
+    impl RtirqInterfaceThread {
+        pub fn handler() -> bool { mailbox_driver::RtirqInterfaceThread::handler() }
+    }
+  }
 }
 
 type SecurityResult = Result<Option<seL4_CPtr>, SecurityRequestError>;
@@ -135,8 +161,8 @@ impl SecurityInterfaceThread {
             SecurityRequest::DeleteKey { bundle_id, key } => {
                 Self::delete_key_request(bundle_id, key)
             }
-            SecurityRequest::TestMailbox => Self::test_mailbox_request(),
             SecurityRequest::CapScan => Self::capscan_request(),
+            SecurityRequest::Test(count) => Self::test_request(count),
         }
     }
     fn echo_request(value: &str, reply_buffer: &mut [u8]) -> SecurityResult {
@@ -288,14 +314,13 @@ impl SecurityInterfaceThread {
         trace!("DELETE KEY bundle_id {} key {}", bundle_id, key);
         cantrip_security().delete_key(bundle_id, key).map(|_| None)
     }
-    fn test_mailbox_request() -> SecurityResult {
-        let _cleanup = Camkes::cleanup_request_cap();
-        trace!("TEST MAILBOX");
-        cantrip_security().test().map(|_| None)
-    }
     fn capscan_request() -> SecurityResult {
         let _cleanup = Camkes::cleanup_request_cap();
         let _ = Camkes::capscan();
         Ok(None)
+    }
+    fn test_request(count: usize) -> SecurityResult {
+        let _cleanup = Camkes::cleanup_request_cap();
+        cantrip_security().test(count).map(|_| None)
     }
 }

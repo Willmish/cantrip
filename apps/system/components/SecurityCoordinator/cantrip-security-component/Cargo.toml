@@ -21,9 +21,18 @@ edition = "2021"
 sel4-config = { path = "../../cantrip-os-common/src/sel4-config" }
 
 [features]
-CONFIG_PLAT_BCM2837 = []
-CONFIG_PLAT_SHODAN = []
-CONFIG_PLAT_NEXUS = []
+# NB: non-shodan platforms need the fake for access to the builtins
+CONFIG_PLAT_BCM2837 = [
+    "cantrip-security-coordinator/fake",
+]
+CONFIG_PLAT_SHODAN = [
+    "cantrip-security-coordinator/fake",
+    "mailbox-driver",
+]
+CONFIG_PLAT_NEXUS = [
+    "cantrip-security-coordinator/sec",
+    "mailbox-driver",
+]
 CONFIG_DEBUG_BUILD = []
 
 [dependencies]
@@ -33,6 +42,7 @@ cantrip-security-interface = { path = "../cantrip-security-interface" }
 cantrip-security-coordinator = { path = "../cantrip-security-coordinator" }
 cfg-if = "1.0"
 log = { version = "0.4", features = ["release_max_level_info"] }
+mailbox-driver = { path = "../mailbox-driver", optional = true }
 postcard = { version = "0.7", features = ["alloc"], default-features = false }
 
 [lib]

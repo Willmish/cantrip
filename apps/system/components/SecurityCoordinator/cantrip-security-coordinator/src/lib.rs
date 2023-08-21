@@ -20,18 +20,14 @@
 #![feature(const_fn_trait_bound)]
 
 extern crate alloc;
-use crate::upload::Upload;
 use alloc::string::{String, ToString};
 use cantrip_memory_interface::cantrip_cnode_alloc;
 use cantrip_memory_interface::cantrip_object_free_in_cnode;
 use cantrip_memory_interface::ObjDescBundle;
 use cantrip_os_common::copyregion::CopyRegion;
 use cantrip_os_common::cspace_slot::CSpaceSlot;
-use cantrip_os_common::sel4_sys;
 use cantrip_security_interface::*;
 use hashbrown::HashMap;
-
-use sel4_sys::seL4_Error;
 
 #[cfg(all(feature = "fake", feature = "sec"))]
 compile_error!("features \"fake\" and \"sec\" are mutually exclusive");
@@ -42,6 +38,7 @@ mod manager;
 pub use manager::CantripSecurityManager;
 
 mod upload;
+use upload::*;
 
 pub const CAPACITY_BUNDLES: usize = 10; // HashMap of bundles
 
@@ -55,13 +52,31 @@ extern "Rust" {
     fn get_deep_copy_dest_mut() -> &'static mut [u8];
 }
 
+// Interface to back-end implementation.
+pub trait SecurityManagerInterface {
+    fn get_builtins(&self) -> Result<BundleIdArray, SecurityRequestError>;
+    fn lookup_builtin(&self, filename: &str) -> Result<BundleData, SecurityRequestError>;
+    fn uninstall(&mut self, bundle_id: &str) -> Result<(), SecurityRequestError>;
+    fn load_application(&mut self, bundle_id: &str) -> Result<(), SecurityRequestError>;
+    fn read_key(&self, bundle_id: &str, key: &str) -> Result<&KeyValueData, SecurityRequestError>;
+    fn write_key(
+        &mut self,
+        bundle_id: &str,
+        key: &str,
+        value: &[u8],
+    ) -> Result<(), SecurityRequestError>;
+    fn delete_key(&mut self, bundle_id: &str, key: &str) -> Result<(), SecurityRequestError>;
+    fn test(&self, count: usize) -> Result<(), SecurityRequestError>;
+}
+
 /// Package contents either come from built-in files or dynamically
 /// loaded from the DebugConsole. Builtin package data resides in (possibly simulated)
 /// Flash. Dynamically loaded package data are stored in memory obtained from
 /// the MemoryManager.
+#[allow(dead_code)]
 enum PkgContents {
-    Flash(&'static [u8]), // Data resides in flash
-    #[allow(dead_code)]
+    Flash(&'static [u8]),   // Data resides in flash
+    Sec(u32),               // Data resides on Security Core (SEC)
     Dynamic(ObjDescBundle), // Data resides in dynamically allocated memory
 }
 
@@ -69,13 +84,21 @@ pub struct BundleData {
     pkg_contents: PkgContents,
     pkg_size: usize,
 }
+#[allow(dead_code)]
 impl BundleData {
     // Returns a bundle for a dynamically loaded package.
-    #[allow(dead_code)]
     fn new(pkg_contents: &ObjDescBundle) -> Self {
         Self {
             pkg_contents: PkgContents::Dynamic(pkg_contents.clone()),
             pkg_size: pkg_contents.size_bytes(),
+        }
+    }
+
+    // Returns a bundle for a builtin package that resided on the SEC.
+    fn new_from_sec(fid: u32, size_bytes: usize) -> Self {
+        Self {
+            pkg_contents: PkgContents::Sec(fid),
+            pkg_size: size_bytes,
         }
     }
 
@@ -91,19 +114,21 @@ impl BundleData {
     // to another thread. The data are copied to newly allocated frames
     // and the frames are aggregated in a CNode ready to attach to
     // an IPC message.
-    fn deep_copy(&self) -> Result<ObjDescBundle, seL4_Error> {
+    fn deep_copy(&self) -> Result<ObjDescBundle, UploadError> {
         let mut upload = match &self.pkg_contents {
             PkgContents::Flash(data) => upload_slice(data),
+            PkgContents::Sec(fid) => upload_sec(*fid, self.pkg_size),
             PkgContents::Dynamic(bundle) => upload_obj_bundle(bundle),
         }?;
 
+        // XXX move to Upload
         // Collect the frames in a top-level CNode.
         let cnode_depth = upload.frames().count_log2();
-        let cnode =
-            cantrip_cnode_alloc(cnode_depth).map_err(|_| seL4_Error::seL4_NotEnoughMemory)?; // TODO(sleffler) From mapping
+        let cnode = cantrip_cnode_alloc(cnode_depth).or(Err(UploadError::MallocFailed))?;
         upload
             .frames_mut()
-            .move_objects_from_toplevel(cnode.objs[0].cptr, cnode_depth as u8)?;
+            .move_objects_from_toplevel(cnode.objs[0].cptr, cnode_depth as u8)
+            .or(Err(UploadError::MoveFailed))?;
         Ok(upload.frames().clone())
     }
 }
@@ -115,30 +140,8 @@ impl Drop for BundleData {
     }
 }
 
-// Interface to back-end implementation.
-pub trait SecurityManagerInterface {
-    fn get_builtins(&self) -> BundleIdArray;
-    fn lookup_builtin(&self, filename: &str) -> Option<&'static [u8]>;
-    fn uninstall(&mut self, bundle_id: &str) -> Result<(), SecurityRequestError>;
-    fn load_application(
-        &mut self,
-        bundle_id: &str,
-        bundle_data: &BundleData,
-    ) -> Result<ObjDescBundle, SecurityRequestError>;
-    fn load_model(&self, model_data: &BundleData) -> Result<ObjDescBundle, SecurityRequestError>;
-    fn read_key(&self, bundle_id: &str, key: &str) -> Result<&KeyValueData, SecurityRequestError>;
-    fn write_key(
-        &mut self,
-        bundle_id: &str,
-        key: &str,
-        value: &[u8],
-    ) -> Result<(), SecurityRequestError>;
-    fn delete_key(&mut self, bundle_id: &str, key: &str) -> Result<(), SecurityRequestError>;
-    fn test(&self) -> Result<(), SecurityRequestError>;
-}
-
 // Returns a copy (including seL4 objects) of |src| in an Upload container.
-fn upload_obj_bundle(src: &ObjDescBundle) -> Result<Upload, seL4_Error> {
+fn upload_obj_bundle(src: &ObjDescBundle) -> Result<Upload, UploadError> {
     // Dest is an upload object that allocates a page at-a-time so
     // the MemoryManager doesn't have to handle a huge memory request.
     let mut dest = Upload::new(unsafe { get_deep_copy_dest_mut() });
@@ -151,23 +154,52 @@ fn upload_obj_bundle(src: &ObjDescBundle) -> Result<Upload, seL4_Error> {
         // Map src frame and copy data (allocating memory as needed)..
         src_slot
             .dup_to(src.cnode, src_cptr, src.depth)
-            .and_then(|_| src_region.map(src_slot.slot))?;
-        dest.write(src_region.as_ref())
-            .or(Err(seL4_Error::seL4_NotEnoughMemory))?; // TODO(sleffler) From mapping
+            .or(Err(UploadError::MoveFailed))?;
+        src_region
+            .map(src_slot.slot)
+            .or(Err(UploadError::PageMap))?;
+
+        dest.write(src_region.as_ref())?;
 
         // Unmap & clear top-level src slot required for mapping.
-        src_region.unmap().and_then(|_| src_slot.delete())?;
+        src_region.unmap().or(Err(UploadError::PageUnmap))?;
+        src_slot.delete().or(Err(UploadError::MoveFailed))?; // XXX ambiguous
     }
     dest.finish();
     Ok(dest)
 }
 
-// Returns a copy (including seL4 objects) of |src| in an Upload container.
-fn upload_slice(src: &[u8]) -> Result<Upload, seL4_Error> {
+#[cfg(feature = "sec")]
+// Returns a copy (including seL4 objects) of |fid| in an Upload container.
+fn upload_sec(fid: u32, size_bytes: usize) -> Result<Upload<'static>, UploadError> {
     // Dest is an upload object that allocates a page at-a-time so
     // the MemoryManager doesn't have to handle a huge memory request.
     let mut dest = Upload::new(unsafe { get_deep_copy_dest_mut() });
-    dest.write(src).or(Err(seL4_Error::seL4_NotEnoughMemory))?;
+
+    let mut off: usize = 0;
+    while off < size_bytes {
+        // Fetch the next page of the file.
+        let frame = dest.expand_and_map()?; // XXX no need to map
+        mailbox_driver::mbox_get_file_page(fid, off as u32, frame)
+            .or(Err(UploadError::ReadFailed))?;
+        off += frame.size_bytes().unwrap();
+        dest.unmap_current_frame()?;
+    }
+    dest.finish();
+    Ok(dest)
+}
+
+#[cfg(not(feature = "sec"))]
+fn upload_sec(_fid: u32, _size_bytes: usize) -> Result<Upload<'static>, UploadError> {
+    Err(UploadError::ReadFailed)
+}
+
+// Returns a copy (including seL4 objects) of |src| in an Upload container.
+fn upload_slice(src: &[u8]) -> Result<Upload, UploadError> {
+    // Dest is an upload object that allocates a page at-a-time so
+    // the MemoryManager doesn't have to handle a huge memory request.
+    let mut dest = Upload::new(unsafe { get_deep_copy_dest_mut() });
+    dest.write(src)?;
     dest.finish();
     Ok(dest)
 }
@@ -205,6 +237,8 @@ impl CantripSecurityCoordinator {
 
     // Probes for a bundle named |key| or |key|+<suffix>; returning Some(v)
     // where |v| is the key under which the bundle is registered.
+    // TODO(sleffler): maybe find_key_value that returns (key, value)
+    //    to eliminate unwrap's
     fn find_key(&self, key: &str) -> Result<String, SecurityRequestError> {
         if self.bundles.contains_key(key) {
             Ok(key.to_string())
@@ -230,10 +264,7 @@ impl CantripSecurityCoordinator {
 
     // Returns a bundle backed by builtin data.
     fn get_bundle_from_builtins(&self, filename: &str) -> Result<BundleData, SecurityRequestError> {
-        self.manager
-            .lookup_builtin(filename)
-            .ok_or(SecurityRequestError::BundleNotFound)
-            .map(BundleData::new_from_flash)
+        self.manager.lookup_builtin(filename)
     }
 
     // Remove any entry for |bundle_id|.
@@ -242,11 +273,23 @@ impl CantripSecurityCoordinator {
             .map(|key| self.bundles.remove(&key))
             .map(|_| ())
     }
+
+    fn load_app_bundle(&mut self, bundle_id: &str) -> Result<ObjDescBundle, SecurityRequestError> {
+        // Clone everything (struct + associated seL4 objects) so the
+        // return is as though it was newly instantiated from flash.
+        let bundle_data = self.bundles.get(bundle_id).unwrap();
+        let app_bundle = bundle_data
+            .deep_copy()
+            .or(Err(SecurityRequestError::LoadApplicationFailed))?;
+        // XXX currently always returns success
+        let _ = self.manager.load_application(bundle_id);
+        Ok(app_bundle)
+    }
 }
 
 impl SecurityCoordinatorInterface for CantripSecurityCoordinator {
     fn install(&mut self, _pkg_contents: &ObjDescBundle) -> Result<String, SecurityRequestError> {
-        // Replaced by install_app & install_model
+        // Deprecated: replaced by install_app & install_model
         Err(SecurityRequestError::InstallFailed)
     }
     fn install_app(
@@ -285,7 +328,7 @@ impl SecurityCoordinatorInterface for CantripSecurityCoordinator {
         // First, dynamically installed bundles.
         let mut result: BundleIdArray = self.bundles.keys().cloned().collect();
         // Second, builtins.
-        result.append(&mut self.manager.get_builtins());
+        result.append(&mut self.manager.get_builtins()?);
         result.sort();
         result.dedup();
         Ok(result)
@@ -305,23 +348,18 @@ impl SecurityCoordinatorInterface for CantripSecurityCoordinator {
     fn load_application(&mut self, bundle_id: &str) -> Result<ObjDescBundle, SecurityRequestError> {
         // NB: loading may promote a bundle from the built-ins archive to the hashmap
         if self.bundles.contains_key(bundle_id) {
-            return self
-                .manager
-                .load_application(bundle_id, self.bundles.get(bundle_id).unwrap());
+            return self.load_app_bundle(bundle_id);
         }
         if let Ok(bd) = self.get_bundle_from_builtins(bundle_id) {
             assert!(self.bundles.insert(bundle_id.to_string(), bd).is_none());
-            return self
-                .manager
-                .load_application(bundle_id, self.bundles.get(bundle_id).unwrap());
+            return self.load_app_bundle(bundle_id);
         }
         let key = promote_key(bundle_id, &[APP_SUFFIX]);
         if !self.bundles.contains_key(&key) {
             let bd = self.get_bundle_from_builtins(&key)?;
             assert!(self.bundles.insert(key.clone(), bd).is_none());
         }
-        self.manager
-            .load_application(&key, self.bundles.get(&key).unwrap())
+        self.load_app_bundle(&key)
     }
     fn load_model(
         &mut self,
@@ -363,6 +401,5 @@ impl SecurityCoordinatorInterface for CantripSecurityCoordinator {
     fn delete_key(&mut self, bundle_id: &str, key: &str) -> Result<(), SecurityRequestError> {
         self.manager.delete_key(&self.find_key(bundle_id)?, key)
     }
-
-    fn test(&mut self) -> Result<(), SecurityRequestError> { self.manager.test() }
+    fn test(&self, count: usize) -> Result<(), SecurityRequestError> { self.manager.test(count) }
 }

@@ -19,6 +19,10 @@ members = [
     "cantrip-security-coordinator",
     "cantrip-security-interface",
 ]
+exclude = [
+    "mailbox-driver",
+    "tests",
+]
 resolver = "2"
 
 [profile.dev]

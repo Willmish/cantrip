@@ -21,21 +21,13 @@ use cantrip_memory_interface::cantrip_frame_alloc;
 use cantrip_memory_interface::cantrip_object_free_toplevel;
 use cantrip_memory_interface::ObjDescBundle;
 use cantrip_os_common::copyregion::CopyRegion;
-use cantrip_os_common::sel4_sys;
 use cantrip_security_interface::*;
 use core::mem::size_of;
 use hashbrown::HashMap;
-use log::trace;
-use mailbox_interface::*;
-
-use sel4_sys::seL4_PageBits;
-use sel4_sys::seL4_Page_GetAddress;
+use log::info;
+use mailbox_driver::*;
 
 const CAPACITY_KEYS: usize = 2; // Per-bundle HashMap of key-values
-
-extern "Rust" {
-    fn get_deep_copy_src_mut() -> &'static mut [u8];
-}
 
 struct SecBundleData {
     keys: HashMap<String, KeyValueData>, // NB: emulate until SEC has support
@@ -89,49 +81,29 @@ pub type CantripSecurityManager = SecSecurityManager; // Bind public name/type
 
 impl SecurityManagerInterface for SecSecurityManager {
     // Returns an array of bundle id's from the builtin archive.
-    fn get_builtins(&self) -> BundleIdArray {
-        // XXX fill-in
-        BundleIdArray::new()
+    fn get_builtins(&self) -> Result<BundleIdArray, SecurityRequestError> {
+        mbox_get_builtins().or(Err(SecurityRequestError::GetPackagesFailed))
     }
 
     // Returns a bundle backed by builtin data.
-    fn lookup_builtin(&self, _filename: &str) -> Option<&'static [u8]> {
-        // XXX fill-in
-        None
+    fn lookup_builtin(&self, filename: &str) -> Result<BundleData, SecurityRequestError> {
+        mbox_find_file(filename)
+            .or(Err(SecurityRequestError::BundleNotFound)) // XXX
+            .map(|(fid, size_bytes)| BundleData::new_from_sec(fid, size_bytes as usize))
     }
 
     fn uninstall(&mut self, bundle_id: &str) -> Result<(), SecurityRequestError> {
         self.remove_bundle(bundle_id)
     }
 
-    fn load_application(
-        &mut self,
-        bundle_id: &str,
-        bundle_data: &BundleData,
-    ) -> Result<ObjDescBundle, SecurityRequestError> {
-        // Clone everything (struct + associated seL4 objects) so the
-        // return is as though it was newly instantiated from flash.
-        // XXX just return the package for now
-        let app_bundle = bundle_data
-            .deep_copy()
-            .or(Err(SecurityRequestError::LoadApplicationFailed))?;
-
+    fn load_application(&mut self, bundle_id: &str) -> Result<(), SecurityRequestError> {
         // Create an sec bundle for possible key ops. Note this persists
         // until the app is uninstall'd. If an app is loaded multiple
         // times w/o an uninstall this will replace any existing with a
         // new/empty hashmap.
         self.bundles
             .insert(bundle_id.to_string(), SecBundleData::new());
-
-        Ok(app_bundle)
-    }
-
-    fn load_model(&self, model_data: &BundleData) -> Result<ObjDescBundle, SecurityRequestError> {
-        // Clone everything (struct + associated seL4 objects) so the
-        // return is as though it was newly instantiated from flash.
-        model_data
-            .deep_copy()
-            .or(Err(SecurityRequestError::LoadModelFailed))
+        Ok(())
     }
 
     // NB: key-value ops require a load'd bundle so only do get_bundle
@@ -161,73 +133,57 @@ impl SecurityManagerInterface for SecSecurityManager {
         Ok(())
     }
 
-    fn test(&self) -> Result<(), SecurityRequestError> {
-        trace!("test manager begin");
-
-        const MESSAGE_SIZE_DWORDS: usize = 17; // Just a random message size for testing.
-
-        // Allocate a 4k page to serve as our message buffer.
-        const PAGE_SIZE: usize = 1 << seL4_PageBits;
-        let frame_bundle =
-            cantrip_frame_alloc(PAGE_SIZE).or(Err(SecurityRequestError::TestFailed))?;
-        trace!("test_mailbox: Frame {:?}", frame_bundle);
-
-        unsafe {
-            // Map the message buffer into our copyregion so we can access it.
-            // NB: re-use one of the deep_copy copyregions.
-            let mut msg_region = CopyRegion::new(get_deep_copy_src_mut());
-            msg_region
-                .map(frame_bundle.objs[0].cptr)
-                .or(Err(SecurityRequestError::TestFailed))?;
-
-            let message_ptr = msg_region.as_word_mut();
-
-            // Write to the message buffer through the copyregion.
-            let offset_a = 0;
-            let offset_b = MESSAGE_SIZE_DWORDS - 1;
-            message_ptr[offset_a] = 0xDEADBEEF;
-            message_ptr[offset_b] = 0xF00DCAFE;
-            trace!(
-                "test_mailbox: old buf contents  0x{:X} 0x{:X}",
-                message_ptr[offset_a],
-                message_ptr[offset_b]
-            );
-
-            // Send the _physical_ address of the message buffer to the security
-            // core.
-            let paddr = seL4_Page_GetAddress(frame_bundle.objs[0].cptr);
-            mailbox_send(paddr.paddr as u32, (MESSAGE_SIZE_DWORDS * size_of::<u32>()) as u32)
-                .or(Err(SecurityRequestError::TestFailed))?;
-
-            // Wait for the response to arrive.
-            let _ = mailbox_recv().or(Err(SecurityRequestError::TestFailed))?;
-
-            // The security core should have replaced the first and last dwords
-            // with 0x12345678 and 0x87654321.
-            trace!("test_mailbox: expected contents 0x12345678 0x87654321");
-            trace!(
-                "test_mailbox: new buf contents  0x{:X} 0x{:X}",
-                message_ptr[offset_a],
-                message_ptr[offset_b]
-            );
-
-            let dword_a = message_ptr[offset_a];
-            let dword_b = message_ptr[offset_b];
-
-            msg_region
-                .unmap()
-                .or(Err(SecurityRequestError::TestFailed))?;
-
-            // Done, free the message buffer.
-            cantrip_object_free_toplevel(&frame_bundle)
-                .or(Err(SecurityRequestError::TestFailed))?;
-
-            if dword_a != 0x12345678 || dword_b != 0x87654321 {
-                return Err(SecurityRequestError::TestFailed);
-            }
+    fn test(&self, count: usize) -> Result<(), SecurityRequestError> {
+        const MAX_WORDS: usize = 4096 / size_of::<u32>();
+        if !(1 < count && count <= MAX_WORDS) {
+            info!("Invalid word count {count}, must be in the range [2..{MAX_WORDS}]");
+            return Err(SecurityRequestError::TestFailed);
         }
 
-        trace!("test manager done");
-        Ok(())
+        fn test_mailbox(
+            count: usize,
+            frame_bundle: &ObjDescBundle,
+        ) -> Result<(), SecurityRequestError> {
+            // Map the message buffer using an existing copyregion.
+            extern "Rust" {
+                fn get_deep_copy_src_mut() -> &'static mut [u8];
+            }
+            let mut msg_region = unsafe { CopyRegion::new(get_deep_copy_src_mut()) };
+            msg_region.map(frame_bundle.objs[0].cptr).expect("map");
+
+            let msg = msg_region.as_word_mut();
+
+            // Write initial values; we expect the SEC to overwrite.
+            let first = 0;
+            let last = count - 1;
+            msg[first] = 0xDEADBEEF;
+            msg[last] = 0xF00DCAFE;
+
+            let sent_bytes = (count * size_of::<u32>()) as u32;
+            let recv_bytes = mbox_test(&frame_bundle.objs[0], sent_bytes).expect("mailbox_test");
+            if recv_bytes != sent_bytes {
+                info!("sent bytes {} != recv bytes {}", sent_bytes, recv_bytes);
+            }
+
+            // The security core should have replaced the first and last dwords
+            // in msg with 0x12345678 and 0x87654321.
+            if msg[first] != 0x12345678 || msg[last] != 0x87654321 {
+                info!("initial data:  0xdeadbeef 0xf00dcafe");
+                info!("expected data: 0x12345678 0x87654321");
+                info!("received data: {:#08x} {:#08x}", msg[first], msg[last]);
+                Err(SecurityRequestError::TestFailed)
+            } else {
+                Ok(())
+            }
+            // NB: msg_region unmapped on drop
+        }
+
+        // Allocate a 4k page to serve as our message buffer.
+        let frame_bundle =
+            cantrip_frame_alloc(4096).or(Err(SecurityRequestError::CapAllocFailed))?;
+        let result = test_mailbox(count, &frame_bundle);
+        let _ = cantrip_object_free_toplevel(&frame_bundle);
+
+        result
     }
 }

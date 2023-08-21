@@ -43,20 +43,6 @@ DeclareCAmkESComponent(TimerService
 )
 
 RustAddLibrary(
-  mailbox_driver
-  SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../../components/MailboxDriver
-  LIB_FILENAME libmailbox_driver.a
-)
-
-DeclareCAmkESComponent(
-  MailboxDriver
-  LIBS mailbox_driver
-  INCLUDES interfaces
-  LINKER_LANGUAGE Rust
-  $ENV{OUT}/cantrip/components
-)
-
-RustAddLibrary(
   uart_driver
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../../components/UARTDriver
   LIB_FILENAME libuart_driver.a

@@ -19,19 +19,28 @@
 import <LoggerInterface.camkes>;
 import <MemoryInterface.camkes>;
 import <SecurityCoordinatorInterface.camkes>;
-import <MailboxInterface.camkes>;
 
 component SecurityCoordinator {
   provides SecurityCoordinatorInterface security;
 
   maybe uses LoggerInterface logger;
   uses MemoryInterface memory;
-  maybe uses MailboxAPI api;
 
   // Mapped cpio archive to emulate eFLASH for use by fake impl.
   // The real hw has no access to this region; it must go through
   // the Security Core.
   dataport Buf(CPIO_SIZE_BYTES) cpio_archive;
+
+  // Mailbox registers
+  maybe dataport Buf mailbox_mmio;
+
+  // Mailbox arrival semaphore
+  has semaphore rx_semaphore;
+
+  // Mailbox interrupts
+  maybe consumes Interrupt irq;
+  attribute int irq_has_thread = false;
+  maybe consumes Interrupt rtirq;
 
   // Enable CantripOS CAmkES support.
   attribute int cantripos = true;

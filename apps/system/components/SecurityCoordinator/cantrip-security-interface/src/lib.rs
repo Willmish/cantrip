@@ -143,8 +143,8 @@ pub enum SecurityRequest<'a> {
         key: &'a str,
     },
 
-    TestMailbox, // Exercise SecureCore mailbox
-    CapScan,     // Dump CNode contents to console
+    CapScan, // Dump CNode contents to console
+    Test(usize),
 }
 impl<'a> SecurityRequest<'a> {
     fn get_container_cap(&self) -> Option<seL4_CPtr> {
@@ -183,8 +183,8 @@ impl<'a> SecurityRequest<'a> {
                 bundle_id: _,
                 key: _,
             }
-            | SecurityRequest::TestMailbox
-            | SecurityRequest::CapScan => None,
+            | SecurityRequest::CapScan
+            | SecurityRequest::Test(_) => None,
         }
     }
 }
@@ -268,7 +268,7 @@ pub trait SecurityCoordinatorInterface {
         value: &[u8],
     ) -> Result<(), SecurityRequestError>;
     fn delete_key(&mut self, bundle_id: &str, key: &str) -> Result<(), SecurityRequestError>;
-    fn test(&mut self) -> Result<(), SecurityRequestError>;
+    fn test(&self, count: usize) -> Result<(), SecurityRequestError>;
 }
 
 #[inline]
@@ -439,11 +439,11 @@ pub fn cantrip_security_delete_key(bundle_id: &str, key: &str) -> Result<(), Sec
 }
 
 #[inline]
-pub fn cantrip_security_test_mailbox() -> Result<(), SecurityRequestError> {
-    cantrip_security_request(&SecurityRequest::TestMailbox)
+pub fn cantrip_security_capscan() -> Result<(), SecurityRequestError> {
+    cantrip_security_request(&SecurityRequest::CapScan)
 }
 
 #[inline]
-pub fn cantrip_security_capscan() -> Result<(), SecurityRequestError> {
-    cantrip_security_request(&SecurityRequest::CapScan)
+pub fn cantrip_security_test(count: usize) -> Result<(), SecurityRequestError> {
+    cantrip_security_request(&SecurityRequest::Test(count))
 }

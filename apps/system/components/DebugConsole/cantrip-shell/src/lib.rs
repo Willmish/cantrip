@@ -401,9 +401,9 @@ fn capscan_command(
             writeln!(output, "capscan <target>, where <target> is one of:")?;
             writeln!(output, "  console (DebugConsole)")?;
             writeln!(output, "  memory (MemoryManager)")?;
-            writeln!(output, "  process (ProcessManager)")?;
             #[cfg(feature = "ml_support")]
             writeln!(output, "  mlcoord (MlCoordinator)")?;
+            writeln!(output, "  process (ProcessManager)")?;
             writeln!(output, "  sdk (SDKRuntime)")?;
             writeln!(output, "  securiy (SecurityCoordinator)")?;
             #[cfg(feature = "timer_support")]

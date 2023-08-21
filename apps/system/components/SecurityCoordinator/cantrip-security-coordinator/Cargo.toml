@@ -18,9 +18,9 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["fake"]
+# NB: one must be selected; see cantrip-security-component/Cargo.toml
 fake = ["cpio"]
-sec = ["mailbox-interface"]
+sec = ["mailbox-driver"]
 
 [dependencies]
 hashbrown = { version = "0.11", features = ["ahash-compile-time-rng"] }
@@ -29,5 +29,5 @@ cantrip-os-common = { path = "../../cantrip-os-common" }
 cantrip-security-interface = { path = "../cantrip-security-interface" }
 cpio = { path = "../../../../../../../crates/cpio", optional = true }
 log = { version = "0.4", features = ["release_max_level_info"] }
-mailbox-interface = { path  = "../../MailboxDriver/mailbox-interface", optional = true }
+mailbox-driver = { path  = "../mailbox-driver", optional = true }
 postcard = { version = "0.7", features = ["alloc"], default-features = false }
