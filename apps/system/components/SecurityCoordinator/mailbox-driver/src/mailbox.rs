@@ -1,4 +1,4 @@
-// Copyright 2022 Google LLC
+// Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,15 @@
 use modular_bitfield::prelude::*;
 use reg_constants::mailbox::*;
 
-unsafe fn get_mbox(offset: usize) -> *const u32 {
+// Glue for mailbox hw access.
+
+pub unsafe fn get_mbox(offset: usize) -> *const u32 {
     extern "Rust" {
         fn get_mailbox_mmio() -> &'static [u8];
     }
     get_mailbox_mmio().as_ptr().add(offset).cast::<u32>()
 }
-unsafe fn get_mbox_mut(offset: usize) -> *mut u32 {
+pub unsafe fn get_mbox_mut(offset: usize) -> *mut u32 {
     extern "Rust" {
         fn get_mailbox_mmio_mut() -> &'static mut [u8];
     }
@@ -31,6 +33,39 @@ unsafe fn get_mbox_mut(offset: usize) -> *mut u32 {
         .as_mut_ptr()
         .add(offset)
         .cast::<u32>()
+}
+
+// Directly manipulate the hardware FIFOs. Synchronous and busy-waits.
+// Not thread-safe (NB: current usage is single-threaded).
+//
+// NB: for synchronous/rootserver we use a fixed delay between
+//   status register reads. This is important for simulation. On
+//   real hardware it's irrelevant (other than maybe reducing power).
+//   The delay was selected to minimize wallclock time when booting
+//   a release build on renode (on a random desktop).
+
+#[inline(never)]
+fn delay(count: usize) -> usize {
+    let mut j = 0usize;
+    for i in 0..count {
+        j += core::hint::black_box(i);
+    }
+    j
+}
+
+pub fn enqueue(x: u32) {
+    while get_status().full() {
+        #[cfg(feature = "rootserver")]
+        delay(1000);
+    }
+    set_mboxw(x);
+}
+pub fn dequeue() -> u32 {
+    while get_status().empty() {
+        #[cfg(feature = "rootserver")]
+        delay(1000);
+    }
+    get_mboxr()
 }
 
 // Interrupt State register.

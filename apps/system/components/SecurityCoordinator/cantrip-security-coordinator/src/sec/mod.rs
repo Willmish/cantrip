@@ -160,7 +160,8 @@ impl SecurityManagerInterface for SecSecurityManager {
             msg[last] = 0xF00DCAFE;
 
             let sent_bytes = (count * size_of::<u32>()) as u32;
-            let recv_bytes = mbox_test(&frame_bundle.objs[0], sent_bytes).expect("mailbox_test");
+            let recv_bytes =
+                mbox_test(frame_bundle.objs[0].cptr, sent_bytes).expect("mailbox_test");
             if recv_bytes != sent_bytes {
                 info!("sent bytes {} != recv bytes {}", sent_bytes, recv_bytes);
             }

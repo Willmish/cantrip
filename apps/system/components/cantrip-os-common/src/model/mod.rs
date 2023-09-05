@@ -31,14 +31,12 @@ use core::convert::TryInto;
 use core::mem::size_of;
 use core::mem::MaybeUninit;
 use core::ptr;
-use cpio::CpioNewcReader;
-use cstr_core::CStr;
 use log::{debug, error, trace};
 use sel4_sys::*;
 use smallvec::SmallVec;
 use static_assertions::*;
 
-// Setup arch- & feature-specific support. Note these must be named
+// Setup arch- & feature-specific support. Note these may be named
 // explicitly below; e.g. loader_alloc::check_untypeds.
 
 // Target-architecture specific support (please keep sorted)
@@ -67,6 +65,30 @@ use arch::PAGE_SIZE; // Base  page size, typically 4KB // XXX temp until moved t
     path = "feature/dynamic_alloc.rs"
 )]
 mod loader_alloc;
+
+// File fill support
+assert_cfg!(
+    all(
+        not(all(
+            feature = "CONFIG_CAPDL_LOADER_FILL_FROM_CPIO",
+            feature = "CONFIG_CAPDL_LOADER_FILL_FROM_SEC"
+        )),
+        any(
+            feature = "CONFIG_CAPDL_LOADER_FILL_FROM_CPIO",
+            feature = "CONFIG_CAPDL_LOADER_FILL_FROM_SEC"
+        )
+    ),
+    "File data load mechanism incorrectly specified"
+);
+#[cfg_attr(
+    feature = "CONFIG_CAPDL_LOADER_FILL_FROM_CPIO",
+    path = "feature/fill_from_cpio.rs"
+)]
+#[cfg_attr(
+    feature = "CONFIG_CAPDL_LOADER_FILL_FROM_SEC",
+    path = "feature/fill_from_sec.rs"
+)]
+mod file_fill;
 
 // MCS feature support
 #[cfg_attr(feature = "CONFIG_KERNEL_MCS", path = "feature/mcs.rs")]
@@ -161,6 +183,7 @@ pub struct CantripOsModel<'a> {
     state: &'a mut dyn ModelState,
     spec: &'a CDL_Model,
     bootinfo: &'a seL4_BootInfo,
+    #[allow(dead_code)]
     capdl_archive: &'a [u8],
     executable: &'a [u8],
 
@@ -181,7 +204,12 @@ pub struct CantripOsModel<'a> {
 
     // CPIO archive lookup cache.
     last_filename: &'a str, // NB: ref into self.spec
-    last_data: &'a [u8],    // NB: ref into self.capdl_archive
+    #[cfg(feature = "CONFIG_CAPDL_LOADER_FILL_FROM_CPIO")]
+    last_data: &'a [u8], // NB: ref into self.capdl_archive
+    #[cfg(feature = "CONFIG_CAPDL_LOADER_FILL_FROM_SEC")]
+    last_fid: u32,
+    #[cfg(feature = "CONFIG_CAPDL_LOADER_FILL_FROM_SEC")]
+    mbox_frame: CDL_ObjID,
 }
 impl<'a> CantripOsModel<'a> {
     pub fn new(
@@ -214,7 +242,12 @@ impl<'a> CantripOsModel<'a> {
             vspace_roots: SmallVec::new(),
 
             last_filename: "",
+            #[cfg(feature = "CONFIG_CAPDL_LOADER_FILL_FROM_CPIO")]
             last_data: capdl_archive,
+            #[cfg(feature = "CONFIG_CAPDL_LOADER_FILL_FROM_SEC")]
+            last_fid: 64 * 1024 * 1024, // Should be invalid, flash is 16M
+            #[cfg(feature = "CONFIG_CAPDL_LOADER_FILL_FROM_SEC")]
+            mbox_frame: CDL_ObjID_Invalid,
         }
     }
 
@@ -490,14 +523,10 @@ impl<'a> CantripOsModel<'a> {
         Ok(())
     }
 
-    fn init_copy_region(&mut self) {
-        /* copy_region is mapped into bss. It will be used as an
-         * address range to map other data for frame loading so unmap
-         * the existing pages. We locate the frame caps by looking in
-         * the boot info and knowing that the userImageFrames are
-         * ordered by virtual address in our address space.
-         */
-
+    // Calculates the CPtr for |vaddr| which is assumed to be in either
+    // the .data or .bss segment of the executable. This is used to unmap
+    // a memory region so it can be remap'd (e.g. for filling page frames).
+    fn get_vaddr_cptr(&self, vaddr: usize) -> seL4_CPtr {
         /* Find the number of frames in the user image according to
          * bootinfo, and compare that to the number of frames backing
          * the image computed by comparing start and end symbols. If
@@ -533,12 +562,41 @@ impl<'a> CantripOsModel<'a> {
 
         let lowest_mapped_vaddr = executable_start - additional_user_image_bytes;
 
-        let copy_addr_frame: seL4_CPtr = self.bootinfo.userImageFrames.start
-            + (unsafe { ptr::addr_of!(copy_region.data[0]) as usize } / PAGE_SIZE)
-            - (lowest_mapped_vaddr / PAGE_SIZE);
+        self.bootinfo.userImageFrames.start + (vaddr / PAGE_SIZE)
+            - (lowest_mapped_vaddr / PAGE_SIZE)
+    }
+
+    fn init_copy_region(&mut self) {
+        let copy_addr_frame =
+            self.get_vaddr_cptr(unsafe { ptr::addr_of!(copy_region.data[0]) as usize });
         for i in 0..(size_of::<CopyRegion>() / PAGE_SIZE) {
             unsafe { seL4_Page_Unmap(copy_addr_frame + i) }.expect("copy_region");
         }
+    }
+
+    fn map_copy_region(sel4_frame: seL4_CPtr) -> Result<usize, seL4_Error> {
+        let seL4_ReadWrite = seL4_CapRights::new(
+            /*grant_reply=*/ 0, /*grant=*/ 0, /*read=*/ 1, /*write=*/ 1,
+        );
+
+        // Map the frame to do the fill.
+        let base = unsafe { ptr::addr_of!(copy_region.data[0]) as usize };
+        unsafe {
+            seL4_Page_Map(
+                sel4_frame,
+                seL4_CapInitThreadVSpace,
+                base,
+                seL4_ReadWrite,
+                seL4_Default_VMAttributes,
+            )
+        }?;
+        Ok(base)
+    }
+
+    fn unmap_copy_region(sel4_frame: seL4_CPtr) -> seL4_Result {
+        // NB: an error causes an unwind through the callers but might
+        //     be better to just panic directly.
+        unsafe { seL4_Page_Unmap(sel4_frame) } // Done, unnmap the frame
     }
 
     pub fn process_bootinfo(&mut self) -> seL4_Result {
@@ -709,6 +767,8 @@ impl<'a> CantripOsModel<'a> {
 
     // Initialise the contents of page frames.
     pub fn init_frames(&mut self) -> seL4_Result {
+        // XXX need RAII cleanup
+        self.fill_begin();
         for (obj_id, obj) in self
             .spec
             .obj_slice()
@@ -717,61 +777,30 @@ impl<'a> CantripOsModel<'a> {
             .filter(|(_, obj)| obj.r#type() == CDL_Frame)
         {
             for i in 0..CONFIG_CAPDL_LOADER_FILLS_PER_FRAME {
+                let sel4_frame = self.get_orig_cap(obj_id);
                 let frame_fill = &obj.frame_fill(i).unwrap();
-                // NB: previous code did a break, continue'ing makes more
-                //     sense but does not matter because
-                //     CONFIG_CAPDL_LOADER_FILLS_PER_FRAME is 1.
-                if frame_fill.type_ != CDL_FrameFill_None {
-                    self.init_frame(self.get_orig_cap(obj_id), frame_fill)?;
+                match frame_fill.type_ {
+                    CDL_FrameFill_None => {}
+                    CDL_FrameFill_BootInfo => {
+                        self.fill_frame_with_bootinfo(sel4_frame, frame_fill)?;
+                    }
+                    CDL_FrameFill_FileData => {
+                        self.fill_frame_with_filedata(sel4_frame, frame_fill)?;
+                    }
                 }
             }
         }
+        self.fill_end();
         Ok(())
-    }
-
-    fn init_frame(
-        &mut self,
-        sel4_frame: seL4_CPtr,
-        frame_fill: &CDL_FrameFill_Element_t,
-    ) -> seL4_Result {
-        let seL4_ReadWrite = seL4_CapRights::new(
-            /*grant_reply=*/ 0, /*grant=*/ 0, /*read=*/ 1, /*write=*/ 1,
-        );
-
-        // Map the frame to do the fill.
-        let base = unsafe { ptr::addr_of!(copy_region.data[0]) as usize };
-        unsafe {
-            seL4_Page_Map(
-                sel4_frame,
-                seL4_CapInitThreadVSpace,
-                base,
-                seL4_ReadWrite,
-                seL4_Default_VMAttributes,
-            )
-        }?;
-
-        // Fill the frame contents from bootinfo or file data that's
-        // embedded in our image.
-        match frame_fill.type_ {
-            CDL_FrameFill_BootInfo => {
-                self.fill_frame_with_bootinfo(base, frame_fill);
-            }
-            CDL_FrameFill_FileData => {
-                self.fill_frame_with_filedata(base, frame_fill);
-            }
-            type_ => {
-                panic!("Unsupported frame fill type {:?}", type_);
-            }
-        }
-
-        // NB: an error causes an unwind through the callers but might
-        //     be better to just panic directly.
-        unsafe { seL4_Page_Unmap(sel4_frame) } // Done, unnmap the frame
     }
 
     // Fill a frame's contents from bootinfo. At the moment these are all
     // arch-specific so this may be better moved to arch:
-    fn fill_frame_with_bootinfo(&self, base: usize, frame_fill: &CDL_FrameFill_Element_t) {
+    fn fill_frame_with_bootinfo(
+        &self,
+        sel4_frame: seL4_CPtr,
+        frame_fill: &CDL_FrameFill_Element_t,
+    ) -> seL4_Result {
         let bi = frame_fill.get_bootinfo();
         match bi.type_ {
             CDL_FrameFill_BootInfo_X86_VBE
@@ -783,6 +812,7 @@ impl<'a> CantripOsModel<'a> {
             }
         }
 
+        let base = Self::map_copy_region(sel4_frame)?;
         let dest = (base + frame_fill.dest_offset) as *mut u8;
         let max_len = frame_fill.dest_len;
         let block_offset = bi.src_offset;
@@ -818,6 +848,7 @@ impl<'a> CantripOsModel<'a> {
             let copy_start = (header as usize) + block_offset;
             unsafe { ptr::copy_nonoverlapping(copy_start as _, dest, copy_len) }
         }
+        Self::unmap_copy_region(sel4_frame)
     }
 
     // Fill with our BootInfo patched per the destination cnode.
@@ -853,37 +884,6 @@ impl<'a> CantripOsModel<'a> {
         };
         // NB: we could adjust the UntypedDesc's but they will not
         //   reflect rootserver resources that are released at exit
-    }
-
-    // Fill a frame's contents from a file in the cpio archive;
-    // in particular this loads each CAmkES component's executable.
-    fn fill_frame_with_filedata(&mut self, base: usize, frame_fill: &CDL_FrameFill_Element_t) {
-        let cpio_lookup = |filename: &str| -> &[u8] {
-            for e in CpioNewcReader::new(self.capdl_archive) {
-                let entry = e.unwrap();
-                if entry.name == filename {
-                    return entry.data;
-                }
-            }
-            panic!("{} not found in cpio archive", filename);
-        };
-        let file_data = frame_fill.get_file_data();
-        let filename = unsafe { CStr::from_ptr(file_data.filename) }
-            .to_str()
-            .unwrap();
-        // Check the last lookup before scanning the cpio archive.
-        if filename != self.last_filename {
-            trace!("switch filedata fill to {}", self.last_filename);
-            self.last_data = cpio_lookup(filename);
-            self.last_filename = filename;
-        }
-        unsafe {
-            ptr::copy_nonoverlapping(
-                ptr::addr_of!(self.last_data[file_data.file_offset]),
-                (base + frame_fill.dest_offset) as *mut u8,
-                frame_fill.dest_len,
-            )
-        }
     }
 
     // Initialize the page tables for each VSpace.

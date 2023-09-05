@@ -29,7 +29,7 @@ component SecurityCoordinator {
   // Mapped cpio archive to emulate eFLASH for use by fake impl.
   // The real hw has no access to this region; it must go through
   // the Security Core.
-  dataport Buf(CPIO_SIZE_BYTES) cpio_archive;
+  maybe dataport Buf(CPIO_SIZE_BYTES) cpio_archive;
 
   // Mailbox registers
   maybe dataport Buf mailbox_mmio;

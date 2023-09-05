@@ -180,7 +180,7 @@ fn upload_sec(fid: u32, size_bytes: usize) -> Result<Upload<'static>, UploadErro
     while off < size_bytes {
         // Fetch the next page of the file.
         let frame = dest.expand_and_map()?; // XXX no need to map
-        mailbox_driver::mbox_get_file_page(fid, off as u32, frame)
+        mailbox_driver::mbox_get_file_page(fid, off as u32, frame.cptr)
             .or(Err(UploadError::ReadFailed))?;
         off += frame.size_bytes().unwrap();
         dest.unmap_current_frame()?;

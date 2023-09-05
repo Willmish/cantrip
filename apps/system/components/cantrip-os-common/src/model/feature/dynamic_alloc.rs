@@ -75,6 +75,8 @@ impl<'a> CantripOsModel<'a> {
         // Record objects that receive special treatment later on.
         let mut bootinfo_frame: CDL_ObjID = CDL_ObjID_Invalid;
         let mut untyped_cnode: CDL_ObjID = CDL_ObjID_Invalid;
+        #[cfg(feature = "CONFIG_CAPDL_LOADER_FILL_FROM_SEC")]
+        let mut mbox_frame: CDL_ObjID = CDL_ObjID_Invalid;
 
         // First, allocate most objects and record the cslot locations.
         // The exception is ASIDPools, where create_object only allocates
@@ -136,6 +138,11 @@ impl<'a> CantripOsModel<'a> {
                             bootinfo_frame
                         );
                         bootinfo_frame = obj_id;
+                    }
+                    #[cfg(feature = "CONFIG_CAPDL_LOADER_FILL_FROM_SEC")]
+                    // TODO(b/305800725)
+                    if obj.paddr() == Some(0x540f1000) {
+                        mbox_frame = obj_id;
                     }
                 }
                 // Look for a CNode associated with any bootinfo frame.
@@ -209,6 +216,10 @@ impl<'a> CantripOsModel<'a> {
         if is_objid_valid(bootinfo_frame) {
             assert!(is_objid_valid(untyped_cnode));
             self.untyped_cnode = untyped_cnode;
+        }
+        #[cfg(feature = "CONFIG_CAPDL_LOADER_FILL_FROM_SEC")]
+        if is_objid_valid(mbox_frame) {
+            self.mbox_frame = mbox_frame;
         }
 
         Ok(())

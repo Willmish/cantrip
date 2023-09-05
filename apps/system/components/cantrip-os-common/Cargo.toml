@@ -20,6 +20,7 @@ edition = "2021"
 [features]
 default = ["camkes_support"]
 camkes_support = ["camkes", "copyregion", "cspace-slot", "logger_support", "slot-allocator"]
+# NB: deprecated; reference crates directly
 capdl_support = ["capdl", "model"]
 logger_support = ["logger"]
 

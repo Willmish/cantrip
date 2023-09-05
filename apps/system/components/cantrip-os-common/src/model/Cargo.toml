@@ -16,11 +16,14 @@ indexmap = "=1.8"
 SEL4_OUT_DIR = "${ROOTDIR}out/cantrip/kernel"
 
 [features]
-default = [
-    "CONFIG_CAPDL_SHARED_FRAMES",  # NB: required for CAmkES
-]
 CONFIG_ARM_HYPERVISOR_SUPPORT = []
 CONFIG_ARM_SMMU = []
+# Select source for capdl component files
+CONFIG_CAPDL_LOADER_FILL_FROM_SEC = [
+    "mailbox-driver",
+    "reg_constants",
+]
+CONFIG_CAPDL_LOADER_FILL_FROM_CPIO = ["cpio"]
 CONFIG_CAPDL_LOADER_CC_REGISTERS = []
 CONFIG_CAPDL_LOADER_STATIC_ALLOC = []
 CONFIG_CAPDL_LOADER_WRITEABLE_PAGES = []
@@ -42,9 +45,20 @@ path = "mod.rs"
 
 [dependencies]
 capdl = { path = "../capdl" }
-cpio = { path = "../../../../../../../../crates/cpio" }
+cpio = { path = "../../../../../../../../crates/cpio", optional = true }
 cstr_core = "0.2.3"
 log = "0.4"
+modular-bitfield = "0.11.2"
+num_enum = { version = ">=0.6.1", default-features = false }
+postcard = { version = "0.7", features = [], default-features = false }
+reg_constants = { path = "../reg_constants", optional = true }
 sel4-sys = { path = "../sel4-sys", default-features = false, features = ["arch_generic"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
 smallvec = "1.10"
 static_assertions = "1.1"
+
+[dependencies.mailbox-driver]
+path = "../../../SecurityCoordinator/mailbox-driver"
+default-features = false
+features = ["rootserver"]
+optional = true
