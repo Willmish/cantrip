@@ -1,5 +1,9 @@
 #![no_std]
 
+pub mod i2s {
+    include!(concat!(env!("OUT_DIR"), "/i2s.rs"));
+}
+
 pub mod mailbox {
     include!(concat!(env!("OUT_DIR"), "/mailbox.rs"));
 }
