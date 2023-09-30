@@ -25,7 +25,9 @@ sel4-config = { path = "../../cantrip-os-common/src/sel4-config" }
 CONFIG_KERNEL_MCS = []
 CONFIG_PLAT_BCM2837 = []
 CONFIG_PLAT_SHODAN = []
-CONFIG_PLAT_NEXUS = []
+CONFIG_PLAT_NEXUS = [
+    "i2s-driver",
+]
 CONFIG_DEBUG_BUILD = []
 
 [dependencies]
@@ -35,6 +37,7 @@ cantrip-memory-interface = { path = "../../MemoryManager/cantrip-memory-interfac
 cantrip-sdk-manager = { path = "../cantrip-sdk-manager" }
 cantrip-sdk-runtime = { path = "../cantrip-sdk-runtime" }
 cfg-if = "1.0"
+i2s-driver = { path = "../i2s-driver", optional = true }
 log = { version = "0.4", features = ["release_max_level_info"] }
 paste = "1.0"
 postcard = { version = "0.7", features = ["alloc"], default-features = false }

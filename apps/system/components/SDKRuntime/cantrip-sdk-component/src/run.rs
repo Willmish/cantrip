@@ -592,3 +592,19 @@ impl SdkManagerInterfaceThread {
         Ok((0, None))
     }
 }
+
+// Glue in i2s driver (for now).
+#[cfg(feature = "i2s-driver")]
+pub struct I2SInterfaceThread;
+#[cfg(feature = "i2s-driver")]
+impl CamkesThreadInterface for I2SInterfaceThread {
+    fn init() { i2s_driver::RxWatermarkInterfaceThread::init(); }
+    fn run() {
+        shared_irq_loop!(
+            i2s,
+            rx_watermark => i2s_driver::RxWatermarkInterfaceThread::handler,
+            tx_empty => i2s_driver::TxEmptyInterfaceThread::handler,
+            tx_watermark => i2s_driver::TxWatermarkInterfaceThread::handler
+        );
+    }
+}

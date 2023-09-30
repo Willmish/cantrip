@@ -31,6 +31,10 @@ component SDKRuntime {
   uses SecurityCoordinatorInterface security;
   maybe uses Timer timer;
 
+  maybe dataport Buf i2s_csr;
+  maybe consumes Interrupt i2s;
+  has semaphore i2s_rx;
+
   // Enable CantripOS CAmkES support.
   attribute int cantripos = true;
 

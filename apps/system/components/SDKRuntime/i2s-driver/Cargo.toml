@@ -1,4 +1,4 @@
-# Copyright 2022 Google LLC
+# Copyright 2023 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,34 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-[workspace]
+[package]
+name = "i2s-driver"
+version = "0.1.0"
+edition = "2021"
 
-members = [
-    "cantrip-sdk-component",
-    "cantrip-sdk-manager",
-    "cantrip-sdk-runtime",
+[build-dependencies]
+sel4-config = { path = "../../cantrip-os-common/src/sel4-config" }
 
-    "sdk-interface",
-]
-exclude = [
-    "i2s-driver",
-    "tests",
-]
-resolver = "2"
-
-[profile.dev]
-opt-level = 0
-debug = true
-# TODO(b/223253186): workaround gdb DIE errors
-lto = false
-codegen-units = 1
-
-[profile.release]
-opt-level = "z"
-lto = "fat"
-codegen-units = 1
-split-debuginfo = "unpacked"
-
-[profile.release.build-override]
-opt-level = "z"
-codegen-units = 1
+[dependencies]
+cantrip-os-common = { path = "../../cantrip-os-common" , default-features = false }
+log = "0.4"
+modular-bitfield = "0.11.2"
+reg_constants = { path = "../../cantrip-os-common/src/reg_constants" }
