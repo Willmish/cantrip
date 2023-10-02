@@ -104,7 +104,7 @@ impl CamkesThreadInterface for UartDriverControlThread {
 // any tx_update that might be waiting for TX_BUFFER to not be full.
 struct TxWatermarkInterfaceThread;
 impl TxWatermarkInterfaceThread {
-    fn handler() -> bool {
+    fn handler() {
         fill_tx_fifo();
 
         // Clears INTR_STATE for tx_watermark. (INTR_STATE is write-1-to-clear.) No
@@ -112,7 +112,6 @@ impl TxWatermarkInterfaceThread {
         // tx_empty will eventually assert and cause anything left in TX_BUFFER
         // to be flushed out.
         set_intr_state(IntrState::new().with_tx_watermark(true));
-        true
     }
 }
 
@@ -123,7 +122,7 @@ impl TxWatermarkInterfaceThread {
 // rx_update that may be waiting on the condition that RX_BUFFER not be empty.
 struct RxWatermarkInterfaceThread;
 impl RxWatermarkInterfaceThread {
-    fn handler() -> bool {
+    fn handler() {
         let mut buf = RX_BUFFER.lock();
         while rx_fifo_level() > 0 {
             if buf.available_data() == 0 {
@@ -148,7 +147,6 @@ impl RxWatermarkInterfaceThread {
         RX_NONEMPTY.post();
 
         set_intr_state(IntrState::new().with_rx_watermark(true));
-        true
     }
 }
 
@@ -159,7 +157,7 @@ impl RxWatermarkInterfaceThread {
 // be waiting for TX_BUFFER to not be full.
 struct TxEmptyInterfaceThread;
 impl TxEmptyInterfaceThread {
-    fn handler() -> bool {
+    fn handler() {
         fill_tx_fifo();
         let buf = TX_BUFFER.lock();
         if buf.is_empty() {
@@ -171,7 +169,6 @@ impl TxEmptyInterfaceThread {
             set_intr_state(IntrState::new().with_tx_empty(true));
         }
         drop(buf); // XXX drop on block exit?
-        true
     }
 }
 

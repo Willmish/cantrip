@@ -137,16 +137,11 @@ macro_rules! static_irq {
 
 /// Main loop for a dedicated IRQ thread (typically invoked by
 /// static_irq_thread!).
-//
-// TODO(sleffler): allowing the handler to disable ack feels brittle; it is
-//   there for the MailboxDriver (probably can eliminate, or maybe just
-//   open-code that case and make handler return void)
-pub fn irq_loop(irq: &seL4_IRQ, handler: fn() -> bool) -> ! {
+pub fn irq_loop(irq: &seL4_IRQ, handler: fn()) -> ! {
     loop {
         irq.wait();
-        if handler() {
-            irq.acknowledge();
-        }
+        handler();
+        irq.acknowledge();
     }
 }
 

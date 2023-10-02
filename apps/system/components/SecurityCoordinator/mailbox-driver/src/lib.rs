@@ -99,11 +99,10 @@ impl From<SECRequestError> for Result<(), SECRequestError> {
 // WTIRQ: interrupt for outbox.count > write_threshold.
 pub struct WtirqInterfaceThread;
 impl WtirqInterfaceThread {
-    pub fn handler() -> bool {
+    pub fn handler() {
         trace!("handle wtirq");
         // Nothing to do (yet), just clear the interrupt.
         set_intr_state(IntrState::new().with_wtirq(true));
-        true
     }
 }
 
@@ -117,23 +116,21 @@ impl RtirqInterfaceThread {
         set_intr_state(IntrState::new().with_rtirq(true));
         set_intr_enable(IntrEnable::new().with_rtirq(true));
     }
-    pub fn handler() -> bool {
+    pub fn handler() {
         trace!("handle rtirq");
         set_intr_state(IntrState::new().with_rtirq(true));
         unsafe { &RX_SEMAPHORE.post() }; // Unblock anyone waiting.
-        true
     }
 }
 
 // EIRQ: interrupt when an error occurs.
 pub struct EirqInterfaceThread;
 impl EirqInterfaceThread {
-    pub fn handler() -> bool {
+    pub fn handler() {
         let error = get_error();
         error!("EIRQ:: read {} write {}", error.read(), error.write());
         // Nothing to do (yet), just clear the interrupt.
         set_intr_state(IntrState::new().with_eirq(true));
-        true
     }
 }
 

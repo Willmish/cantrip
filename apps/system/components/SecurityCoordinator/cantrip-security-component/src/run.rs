@@ -88,7 +88,7 @@ cfg_if! {
     // RTIRQ: interrupt for inbox.count > read_threshold.
     struct RtirqInterfaceThread;
     impl RtirqInterfaceThread {
-        pub fn handler() -> bool { mailbox_driver::RtirqInterfaceThread::handler() }
+        pub fn handler() { mailbox_driver::RtirqInterfaceThread::handler(); }
     }
   }
 }
