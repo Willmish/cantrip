@@ -103,6 +103,11 @@ impl CamkesThreadInterface for UartDriverControlThread {
 // prevent stalling, stopping early if TX_BUFFER becomes empty, and then signals
 // any tx_update that might be waiting for TX_BUFFER to not be full.
 struct TxWatermarkInterfaceThread;
+impl CamkesThreadInterface for TxWatermarkInterfaceThread {
+    fn run() {
+        dedicated_irq_loop!(tx_watermark, Self::handler);
+    }
+}
 impl TxWatermarkInterfaceThread {
     fn handler() {
         fill_tx_fifo();
@@ -121,6 +126,11 @@ impl TxWatermarkInterfaceThread {
 // stopping early if RX_BUFFER becomes full and then signals any call
 // rx_update that may be waiting on the condition that RX_BUFFER not be empty.
 struct RxWatermarkInterfaceThread;
+impl CamkesThreadInterface for RxWatermarkInterfaceThread {
+    fn run() {
+        dedicated_irq_loop!(rx_watermark, Self::handler);
+    }
+}
 impl RxWatermarkInterfaceThread {
     fn handler() {
         let mut buf = RX_BUFFER.lock();
@@ -156,6 +166,11 @@ impl RxWatermarkInterfaceThread {
 // if TX_BUFFER becomes empty, and then signals any tx_update that might
 // be waiting for TX_BUFFER to not be full.
 struct TxEmptyInterfaceThread;
+impl CamkesThreadInterface for TxEmptyInterfaceThread {
+    fn run() {
+        dedicated_irq_loop!(tx_empty, Self::handler);
+    }
+}
 impl TxEmptyInterfaceThread {
     fn handler() {
         fill_tx_fifo();

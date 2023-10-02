@@ -64,9 +64,7 @@ impl CamkesThreadInterface for TimerServiceControlThread {
         }
     }
     fn run() {
-        camkes::irq::irq_loop(&TIMER_INTERRUPT_IRQ, || {
-            cantrip_timer().service_interrupt()
-        });
+        camkes::irq::irq_loop(&TIMER_INTERRUPT_IRQ, || cantrip_timer().service_interrupt());
     }
 }
 

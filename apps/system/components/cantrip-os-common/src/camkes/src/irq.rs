@@ -136,13 +136,22 @@ macro_rules! static_irq {
 }
 
 /// Main loop for a dedicated IRQ thread (typically invoked by
-/// static_irq_thread!).
+/// dedicated_irq_loop!).
 pub fn irq_loop(irq: &seL4_IRQ, handler: fn()) -> ! {
     loop {
         irq.wait();
         handler();
         irq.acknowledge();
     }
+}
+
+#[macro_export]
+macro_rules! dedicated_irq_loop {
+    ($irq_tag:ident, $handler:expr) => {
+        crate::paste! {
+            crate::irq::irq_loop(&[<$irq_tag:upper _IRQ>], $handler)
+        }
+    };
 }
 
 /// Main loop to handle multiple IRQ's sharing a single notification

@@ -261,34 +261,31 @@ impl Camkes {
 ///
 /// struct ReadInterfaceThread;
 /// impl CamkesThreadInterface for ReadInterfaceThread {
-///     fn run() -> ! {
+///     fn run() {
 ///         rpc_basic_recv!(Read, READ_REQUEST_DATA_SIZE, UartDriverError::Success);
 ///     }
 /// }
 ///
-/// Threads for handling IRQ's have a slightly different implementation to hide
-/// IRQ processing boilerplate. In camkes.rs this is generated:
+/// Note that threads that handle irq's are just an interface thread with a
+/// scripted run method. For a thread dedicated to a single irq one would use
+/// something like:
 ///
-/// static_irq_thread!(
-///    /*name=*/ tx_empty,
-///    /*tcb=*/ SELF_TCB_TX_EMPTY,
-///    /*ipc_buffer=*/ core::ptr::addr_of!(_camkes_ipc_buffer_uart_driver_tx_empty_0000.data[4096]),
-///    &CAMKES
-/// );
-///
-/// while the component has something like this:
-///
-/// struct TxEmptyInterfaceThread;
-/// impl TxEmptyInterfaceThread {
-///     fn handler() -> bool {
-///         ...
-///        true
-///    }
+/// impl CamkesthreadInterface for RtirqInterfaceThread {
+///    fn run() { dedicated_irq_loop!(rtirq, Self::handler) }
 /// }
 ///
-/// IRQ handlers use the return value to signal whether processing is complete
-/// and the IRQ should be acknowledged. If the caller does not ack the IRQ, the
-/// component implementation is required to do it.
+/// while a thread that services multiple irq's would use, for example:
+///
+/// impl CamkesThreadInterface for I2SInterfaceThread {
+///    fn run() {
+///        shared_irq_loop!(
+///            i2s,
+///            rx_watermark => i2s_driver::RxWatermarkInterfaceThread::handler,
+///            tx_watermark => i2s_driver::TxWatermarkInterfaceThread::handler,
+///            tx_empty => i2s_driver::TxEmptyInterfaceThread::handler
+///        }
+///    }
+/// }
 
 #[macro_export]
 macro_rules! _static_thread {
@@ -304,28 +301,6 @@ macro_rules! _static_thread {
                     &[<$name:upper _ $variant:upper _TLS>],
                     $camkes,
                 );
-        }
-    };
-    (@IRQ $irq_name:ident, $tcb:expr, $ipc_buffer:expr, $camkes:expr) => {
-        crate::paste! {
-            static [<$irq_name:upper _INTERFACE_TLS>]: StaticTLS =
-                StaticTLS { data: [0u8; CONFIG_SEL4RUNTIME_STATIC_TLS] };
-            pub static [<$irq_name:upper _THREAD>]: CamkesThread =
-                CamkesThread::Interface(
-                    $tcb,
-                    stringify!($irq_name),
-                    unsafe { &*($ipc_buffer as *mut sel4_sys::seL4_IPCBuffer) },
-                    &[<$irq_name:upper _INTERFACE_TLS>],
-                    $camkes,
-                );
-            impl CamkesThreadInterface for crate::[<$irq_name:camel InterfaceThread>] {
-                fn run() {
-                    crate::camkes::irq::irq_loop(
-                        &[<$irq_name:upper _IRQ>],
-                        Self::handler,
-                    )
-                }
-            }
         }
     };
     (@FAULT $name:ident, $tcb:expr, $ipc_buffer:expr, $camkes:expr) => {
@@ -347,12 +322,6 @@ macro_rules! _static_thread {
 macro_rules! static_control_thread {
     ($name:ident, $tcb:expr, $ipc_buffer:expr, $camkes:expr) => {
         $crate::_static_thread!(Control, $name, $tcb, $ipc_buffer, $camkes);
-    };
-}
-#[macro_export]
-macro_rules! static_irq_thread {
-    ($irq_name:ident, $tcb:expr, $ipc_buffer:expr, $camkes:expr) => {
-        $crate::_static_thread!(@IRQ $irq_name, $tcb, $ipc_buffer, $camkes);
     };
 }
 #[macro_export]

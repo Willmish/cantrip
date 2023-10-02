@@ -87,8 +87,13 @@ cfg_if! {
   if #[cfg(feature = "mailbox-driver")] {
     // RTIRQ: interrupt for inbox.count > read_threshold.
     struct RtirqInterfaceThread;
-    impl RtirqInterfaceThread {
-        pub fn handler() { mailbox_driver::RtirqInterfaceThread::handler(); }
+    impl CamkesThreadInterface for RtirqInterfaceThread {
+        fn run() {
+            dedicated_irq_loop!(
+                rtirq,
+                mailbox_driver::RtirqInterfaceThread::handler
+            )
+        }
     }
   }
 }
