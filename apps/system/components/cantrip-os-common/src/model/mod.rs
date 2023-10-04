@@ -932,20 +932,14 @@ impl<'a> CantripOsModel<'a> {
 
         fn DebugMapFrameError(sel4_page: seL4_Word, vaddr: usize, error: seL4_Error) {
             // Provide more info to help in diagnosing an error.
-            let addr = unsafe { seL4_Page_GetAddress(sel4_page) };
-            if addr.error != 0 {
-                error!(
-                    "Failed to map frame: \
-                       <unknown physical address (error = {})> \
-                       -> 0x{:x}, error {:?}",
-                    addr.error, vaddr, error
-                );
-            } else {
-                error!(
-                    "Failed to map frame: \
-                       0x{:x} -> {:x}, error {:?}",
-                    addr.paddr, vaddr, error
-                );
+            match unsafe { seL4_Page_GetAddress(sel4_page) } {
+                Err(e) => error!(
+                    "Failed to map frame: <unknown paddr ({:?})> -> 0x{:x}, {:?}",
+                    e, vaddr, error
+                ),
+                Ok(paddr) => {
+                    error!("Failed to map frame: 0x{:x} -> {:x}, {:?}", paddr, vaddr, error)
+                }
             }
         }
 

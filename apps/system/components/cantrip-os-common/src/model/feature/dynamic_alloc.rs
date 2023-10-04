@@ -342,7 +342,7 @@ impl<'a> CantripOsModel<'a> {
                 ut.paddr <= obj_addr
                     && obj_addr + BIT(obj_size_bits) <= ut.paddr + BIT(ut.size_bits())
             }
-            fn get_address(ut_slot: seL4_CPtr) -> Result<seL4_Page_GetAddress, seL4_Error> {
+            fn get_address(ut_slot: seL4_CPtr) -> Result<seL4_Word, seL4_Error> {
                 // Create a temporary frame to get the address. We load this at slot + 2
                 // to avoid the free_slot (where we want to write out object) and + 1 where
                 // our "hold" cap is located (see above).
@@ -358,7 +358,7 @@ impl<'a> CantripOsModel<'a> {
                         temp_slot,
                         1,
                     )?;
-                    let temp_addr = seL4_Page_GetAddress(temp_slot);
+                    let temp_addr = seL4_Page_GetAddress(temp_slot)?;
                     seL4_CNode_Delete(seL4_CapInitThreadCNode, temp_slot, seL4_WordBits as u8)?;
                     Ok(temp_addr)
                 }
@@ -384,12 +384,12 @@ impl<'a> CantripOsModel<'a> {
                             1,
                         )
                     }?;
-                    let addr: seL4_Page_GetAddress = if sel4_type == seL4_UntypedObject {
-                        get_address(free_slot)?
+                    let free_slot_addr = if sel4_type == seL4_UntypedObject {
+                        get_address(free_slot)
                     } else {
                         unsafe { seL4_Page_GetAddress(free_slot) }
-                    };
-                    if addr.paddr == paddr {
+                    }?;
+                    if free_slot_addr == paddr {
                         // Found our object, delete any holding cap.
                         if let Some(hold_slot_cap) = hold_slot {
                             unsafe {

@@ -30,9 +30,17 @@ pub use seL4_RISCV_Default_VMAttributes as seL4_Default_VMAttributes;
 pub use seL4_RISCV_ASIDControl_MakePool as seL4_ASIDControl_MakePool;
 pub use seL4_RISCV_ASIDPool_Assign as seL4_ASIDPool_Assign;
 pub use seL4_RISCV_PageTable_Map as seL4_PageTable_Map;
-pub use seL4_RISCV_Page_GetAddress as seL4_Page_GetAddress;
 // NB: seL4_Page_Map impl found below
 pub use seL4_RISCV_Page_Unmap as seL4_Page_Unmap;
+
+pub unsafe fn seL4_Page_GetAddress(frame: seL4_RISCV_Page) -> Result<seL4_Word, seL4_Error> {
+    let ret = seL4_RISCV_Page_GetAddress(frame);
+    if ret.error != 0 {
+        Err(core::mem::transmute(ret.error))
+    } else {
+        Ok(ret.paddr)
+    }
+}
 
 pub unsafe fn seL4_Page_Map(
     sel4_page: seL4_CPtr,

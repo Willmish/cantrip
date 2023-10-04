@@ -149,9 +149,9 @@ fn sec_request<T: DeserializeOwned>(
 
     let bytes = roundup(encoded_bytes, size_of::<u32>()) as u32;
     if let Some(cptr) = opt_cap {
-        let ret = unsafe { seL4_Page_GetAddress(cptr) };
+        let paddr = unsafe { seL4_Page_GetAddress(cptr) }.or(Err(SECRequestError::PageInvalid))?;
         enqueue(bytes | HEADER_FLAG_LONG_MESSAGE);
-        enqueue(ret.paddr as u32);
+        enqueue(paddr as u32);
     } else {
         enqueue(bytes); // NB: no associated page
     }
