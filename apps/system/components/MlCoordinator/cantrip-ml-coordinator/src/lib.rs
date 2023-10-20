@@ -30,6 +30,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use cantrip_memory_interface::cantrip_object_free_in_cnode;
 use cantrip_ml_interface::MlCoordError;
+use cantrip_ml_interface::MlInput;
 use cantrip_ml_interface::MlOutput;
 use cantrip_ml_interface::MAX_OUTPUT_DATA;
 use cantrip_ml_shared::*;
@@ -419,6 +420,33 @@ impl MLCoordinator {
         let mask = self.completed_job_mask;
         self.completed_job_mask = 0;
         mask as u32
+    }
+
+    pub fn get_input_params(
+        &mut self,
+        client_id: usize,
+        id: ImageId,
+    ) -> Result<MlInput, MlCoordError> {
+        // Load model as needed.
+        if self.get_model_index(&id).is_none() {
+            self.ready_model(client_id, id, None)?;
+        }
+        let (input_ptr, input_size_bytes) = MlCore::get_input_params()?;
+        Ok(MlInput {
+            input_ptr,
+            input_size_bytes,
+        })
+    }
+
+    pub fn set_input(
+        &mut self,
+        id: &ImageId,
+        input_data_offset: u32,
+        input_data: &[u8],
+    ) -> Result<(), MlCoordError> {
+        // NB: model must be loaded so the header is in TCM
+        let _ = self.get_model_index(id).ok_or(MlCoordError::NoSuchModel)?;
+        MlCore::set_input_data(input_data_offset as usize, input_data)
     }
 
     pub fn get_output(&mut self, id: &ImageId) -> Result<MlOutput, MlCoordError> {

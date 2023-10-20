@@ -21,6 +21,7 @@ use alloc::string::ToString;
 use cantrip_ml_coordinator::MLCoordinator;
 use cantrip_ml_coordinator::ModelIdx;
 use cantrip_ml_interface::CompleteJobsResponse;
+use cantrip_ml_interface::GetInputParamsResponse;
 use cantrip_ml_interface::GetOutputResponse;
 use cantrip_ml_interface::MlCoordError;
 use cantrip_ml_interface::MlCoordRequest;
@@ -143,6 +144,16 @@ impl MlcoordInterfaceThread {
                 bundle_id,
                 model_id,
             } => Self::get_output_request(bundle_id, model_id, reply_buffer),
+            MlCoordRequest::GetInputParams {
+                bundle_id,
+                model_id,
+            } => Self::get_input_params_request(client_badge, bundle_id, model_id, reply_buffer),
+            MlCoordRequest::SetInput {
+                bundle_id,
+                model_id,
+                input_data_offset,
+                input_data,
+            } => Self::set_input_request(bundle_id, model_id, input_data_offset, input_data),
             MlCoordRequest::Oneshot {
                 bundle_id,
                 model_id,
@@ -181,6 +192,38 @@ impl MlcoordInterfaceThread {
         let reply_slice = postcard::to_slice(&GetOutputResponse { output }, reply_buffer)
             .or(Err(MlCoordError::SerializeError))?;
         Ok(reply_slice.len())
+    }
+
+    fn get_input_params_request(
+        client_badge: usize,
+        bundle_id: &str,
+        model_id: &str,
+        reply_buffer: &mut [u8],
+    ) -> Result<usize, MlCoordError> {
+        let image_id = ImageId {
+            bundle_id: bundle_id.to_string(),
+            model_id: model_id.to_string(),
+        };
+        let input = ML_COORD.lock().get_input_params(client_badge, image_id)?;
+        let reply_slice = postcard::to_slice(&GetInputParamsResponse { input }, reply_buffer)
+            .or(Err(MlCoordError::SerializeError))?;
+        Ok(reply_slice.len())
+    }
+
+    fn set_input_request(
+        bundle_id: &str,
+        model_id: &str,
+        input_data_offset: u32,
+        input_data: &[u8],
+    ) -> Result<usize, MlCoordError> {
+        let image_id = ImageId {
+            bundle_id: bundle_id.to_string(),
+            model_id: model_id.to_string(),
+        };
+        ML_COORD
+            .lock()
+            .set_input(&image_id, input_data_offset, input_data)?;
+        Ok(0)
     }
 
     fn oneshot_request(

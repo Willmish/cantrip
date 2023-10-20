@@ -19,6 +19,7 @@
 extern crate alloc;
 use alloc::boxed::Box;
 use cantrip_io::Read;
+use cantrip_ml_interface::MlCoordError;
 use cantrip_ml_shared::*;
 
 pub const WMMU_PAGE_SIZE: usize = 0x1000;
@@ -59,10 +60,16 @@ pub fn clear_data_fault() {}
 
 pub fn reset() {}
 
-pub fn clear_tcm(_addr: usize, _len: usize) {}
+pub fn tcm_clear(_addr: usize, _len: usize) {}
 
 pub fn wait_for_clear_to_finish() {}
 
 pub fn get_output_header(_data_top_addr: usize, _sizes: &ImageSizes) -> OutputHeader {
     OutputHeader::default()
+}
+
+pub fn get_input_params() -> Result<(u32, u32), MlCoordError> { Ok((0, 0)) }
+
+pub fn set_input_data(_input_data_offset: usize, _input_data: &[u8]) -> Result<(), MlCoordError> {
+    Ok(())
 }

@@ -688,5 +688,6 @@ fn map_ml_err(err: MlCoordError) -> SDKError {
         MlCoordError::DeserializeError => SDKError::DeserializeFailed,
         MlCoordError::UnknownError => unreachable!(),
         MlCoordError::Success => unreachable!(),
+        MlCoordError::InvalidInputRange => SDKError::InvalidInputRange,
     }
 }

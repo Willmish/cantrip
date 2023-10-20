@@ -79,34 +79,37 @@ pub fn run() {
 }
 
 /*
- * From the kelvin linker script.
- *
- *  TCM_ORIGIN          --->   +=====================+
- *                             |                     |
- *                             |       .text         |
- *                             +---------------------|
- *                             |       .crt          |
- *                             +---------------------+
- *                             |      .rodata        |
- *                             +---------------------+
- *                             |    .init_array      |
- *                             +---------------------+
- *                             |       .data         |
- *                             +---------------------+
- *                             |       .bss          |
- *                             +---------------------+
- *                             |       .heap         |
- *                             |  (All unclamied     |
- *                             |       memory)       |
- *                             |                     |
- *  (TCM_END - stack    --->   +---------------------+
- *     - model_output          |       .stack        |
- *     - output_header)        +---------------------+
- *                             |   .model_output     |
- *  output_header (64B) --->   +---------------------+
- *                             |   .output_header    |
- *  TCM_END             --->   +=====================+
- */
+* From the kelvin linker script.
+*
+*  TCM_ORIGIN          --->   +=====================+
+*                             |                     |
+*                             |       .text         |
+*                             +---------------------|
+*                             |       .crt          |
+*                             +---------------------+
+*                             |      .rodata        |
+*                             +---------------------+
+*                             |    .init_array      |
+*                             +---------------------+
+*                             |       .data         |
+*                             +---------------------+
+*                             |       .bss          |
+*                             +---------------------+
+*                             |       .heap         |
+*                             |  (All unclamied     |
+*                             |       memory)       |
+*                             |                     |
+*  (TCM_END - 4096     --->   +---------------------+
+*     - model_output          |       .stack        |
+*     - stack)                +---------------------+
+*                             |   .model_output     |
+*  TCM_END - 4096      --->   +=====================+
+*                             |   .model_input      |
++                             | (remainder of page) |
+*                             +---------------------+
+*  output_header (64B) --->   |.model_output_header |
+*  TCM_END             --->   +=====================+
+*/
 pub fn preprocess_image(id: &ImageId, image: &mut BundleImage) -> Option<(ImageSizes, ImageSizes)> {
     let mut on_flash_sizes = ImageSizes::default();
     let mut in_memory_sizes = ImageSizes::default();
@@ -211,7 +214,19 @@ pub fn tcm_read(src: usize, src_len: usize, dest: &mut [u8; MAX_OUTPUT_DATA]) {
     let tcm_offset = src - TCM_PADDR;
     let count = cmp::min(cmp::min(src_len, TCM_SIZE - tcm_offset), dest.len());
 
-    dest[..count].copy_from_slice(unsafe { &get_tcm_mut()[tcm_offset..tcm_offset + count] });
+    dest[..count].copy_from_slice(unsafe { &get_tcm()[tcm_offset..tcm_offset + count] });
+}
+
+/// Writes |src_data| starting at |dst|.
+pub fn tcm_write(dst: usize, src_data: &[u8]) {
+    trace!("WRITE {} bytes {:#x}", src_data.len(), dst);
+
+    assert!(dst >= TCM_PADDR);
+    assert!(dst + src_data.len() <= TCM_PADDR + TCM_SIZE);
+
+    let tcm_offset = dst - TCM_PADDR;
+    let tcm_slice = unsafe { get_tcm_mut() };
+    tcm_slice[tcm_offset..tcm_offset + src_data.len()].copy_from_slice(src_data);
 }
 
 // Interrupts are write 1 to clear.
@@ -226,7 +241,7 @@ pub fn clear_instruction_fault() {
 pub fn reset() { ml_top::set_ctrl(ml_top::Ctrl::new().with_ml_reset(true)); }
 
 /// Zeroes out |byte_length| bytes starting at |addr|.
-pub fn clear_tcm(addr: usize, byte_length: usize) {
+pub fn tcm_clear(addr: usize, byte_length: usize) {
     trace!("CLEAR TCM {:#x} to {:#x}", addr, addr + byte_length);
 
     assert!(addr >= TCM_PADDR);
@@ -240,32 +255,64 @@ pub fn clear_tcm(addr: usize, byte_length: usize) {
 }
 
 #[repr(C)]
-struct KelvinOutputHeader {
+struct KelvinModelHeader {
     return_code: u32,
     output_ptr: u32,
     output_length: u32,
 }
+const KELVIN_MODEL_HEADER_SIZE: usize = 0x40;
+const MODEL_IO_REGION: usize = 4096;
 
-/// Returns a copy of the OutputHeader.
-pub fn get_output_header(_data_top_addr: usize, _sizes: &ImageSizes) -> OutputHeader {
-    // The OutputHeader is at a fixed location set in the linker script.
-    // The output_ptr field points to indirect data if output_length > 0.
-    let addr = TCM_PADDR + (TCM_SIZE - 64);
-    trace!("GET OUTPUT at {:#x}", addr);
+fn get_kelvin_header() -> KelvinModelHeader {
+    // The ModelHeader is at a fixed location set in the linker script.
+    let addr = TCM_PADDR + (TCM_SIZE - KELVIN_MODEL_HEADER_SIZE);
     assert!(((addr - TCM_PADDR) % size_of::<u32>()) == 0);
-
-    let kelvin_header = unsafe {
+    unsafe {
         get_tcm()
             .as_ptr()
             .add(addr - TCM_PADDR)
-            .cast::<KelvinOutputHeader>()
+            .cast::<KelvinModelHeader>()
             .read()
-    };
+    }
+}
+
+/// Returns a copy of the OutputHeader.
+pub fn get_output_header(_data_top_addr: usize, _sizes: &ImageSizes) -> OutputHeader {
+    let kelvin_header = get_kelvin_header();
     OutputHeader {
         return_code: kelvin_header.return_code,
-        // NB: output_ptr is a TCM offset, adjust for use with tcm_read
+        // The output_ptr field points to indirect data if output_length > 0.
+        // NB: output_ptr from header is a TCM offset, adjust for use with tcm_read
         output_ptr: Some((TCM_PADDR as u32) + kelvin_header.output_ptr),
         output_length: kelvin_header.output_length,
         epc: None,
+    }
+}
+
+/// Returns the loaded model's input parameters.
+pub fn get_input_params() -> Result<(u32, u32), MlCoordError> {
+    // NB: model_input layout is fixed by the kelvin.ld linker script
+    Ok((
+        (TCM_SIZE - MODEL_IO_REGION) as u32,
+        (MODEL_IO_REGION - KELVIN_MODEL_HEADER_SIZE) as u32,
+    ))
+}
+
+pub fn set_input_data(input_data_offset: usize, input_data: &[u8]) -> Result<(), MlCoordError> {
+    let (input_ptr, input_size_bytes) = get_input_params()?;
+    let tcm_input_begin = TCM_PADDR + (input_ptr as usize);
+    let tcm_input_end = tcm_input_begin + (input_size_bytes as usize);
+    trace!(
+        "SET INPUT at offset {:#x} input {:#x} to {:#x}",
+        input_data_offset,
+        tcm_input_begin,
+        tcm_input_end,
+    );
+    let tcm_input_max = TCM_PADDR + TCM_SIZE - KELVIN_MODEL_HEADER_SIZE;
+    if tcm_input_begin + input_data_offset + input_data.len() <= tcm_input_max {
+        tcm_write(tcm_input_begin + input_data_offset, input_data);
+        Ok(())
+    } else {
+        Err(MlCoordError::InvalidInputRange)
     }
 }

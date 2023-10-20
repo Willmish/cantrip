@@ -19,4 +19,5 @@ edition = "2021"
 
 [dependencies]
 cantrip-io.workspace = true
+cantrip-ml-interface.workspace = true
 cantrip-ml-shared.workspace = true

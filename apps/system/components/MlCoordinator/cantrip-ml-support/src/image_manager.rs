@@ -361,7 +361,7 @@ impl ImageManager {
     }
 
     /// Zeroes out the temporary data section.
-    pub fn clear_temp_data(&self) { MlCore::clear_tcm(self.tcm_bottom, self.tcm_bottom_size()); }
+    pub fn clear_temp_data(&self) { MlCore::tcm_clear(self.tcm_bottom, self.tcm_bottom_size()); }
 
     /// Gets the output header for |id|.
     pub fn output_header(&self, id: &ImageId) -> Option<OutputHeader> {

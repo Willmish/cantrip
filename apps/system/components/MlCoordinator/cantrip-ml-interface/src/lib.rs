@@ -43,6 +43,20 @@ pub struct MlOutput {
     pub data: [u8; MAX_OUTPUT_DATA],
 }
 
+/// Model input state. |input_ptr| is the TCM address where input data
+/// should be written. The model is responsible for getting data from
+/// that location to the runtime (e.g. with a copy). |input_size_bytes|
+/// specifies the available space which may be different than the amount
+/// of input data expected by a model. The amount of input data expected
+/// (required) by a model is assumed known by clients and should not be
+/// greater than |input_size_bytes|. See also cantrip_mlcoord_set_input
+/// for information about writing the input data area.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MlInput {
+    pub input_ptr: u32,
+    pub input_size_bytes: u32,
+}
+
 /// Errors that can occur when interacting with the MlCoordinator.
 #[repr(usize)]
 #[derive(Debug, Default, Eq, PartialEq, FromPrimitive, IntoPrimitive)]
@@ -58,6 +72,7 @@ pub enum MlCoordError {
     DeserializeError,
     #[default]
     UnknownError,
+    InvalidInputRange,
 }
 impl From<MlCoordError> for Result<(), MlCoordError> {
     fn from(err: MlCoordError) -> Result<(), MlCoordError> {
@@ -96,6 +111,21 @@ pub enum MlCoordRequest<'a> {
         model_id: &'a str,
     },
 
+    // Returns the model's input data parameters.
+    GetInputParams {
+        // -> MlInput
+        bundle_id: &'a str,
+        model_id: &'a str,
+    },
+
+    // Sets/writes input data.
+    SetInput {
+        bundle_id: &'a str,
+        model_id: &'a str,
+        input_data_offset: u32,
+        input_data: &'a [u8],
+    },
+
     DebugState,
     Capscan,
 }
@@ -108,6 +138,11 @@ pub struct CompleteJobsResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GetOutputResponse {
     pub output: MlOutput,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetInputParamsResponse {
+    pub input: MlInput,
 }
 
 // NB: selected s.t. MlOutput (MAX_OUTPUT_DATA) + MlInput (MAX_INPUT_DATA) work
@@ -179,6 +214,41 @@ pub fn cantrip_mlcoord_get_output(
         model_id,
     })
     .map(|reply: GetOutputResponse| reply.output)
+}
+
+/// Returns the input parameters for the specified job.
+#[inline]
+pub fn cantrip_mlcoord_get_input_params(
+    bundle_id: &str,
+    model_id: &str,
+) -> Result<MlInput, MlCoordError> {
+    cantrip_mlcoord_request(&MlCoordRequest::GetInputParams {
+        bundle_id,
+        model_id,
+    })
+    .map(|reply: GetInputParamsResponse| reply.input)
+}
+
+/// Writes the input data area for the specified job. |input_data_offset|
+/// is specified relative to the start of the area identified by
+/// cantrip_mlcoord_get_input_params. It is an error to write data that
+/// do not fit entirely in the input data area. Input data are initially
+/// written as part of loading a model and can be written many times
+/// before a job is run (e.g. to write data piecemeal). Writing input
+/// data while a job is running is undefined.
+#[inline]
+pub fn cantrip_mlcoord_set_input(
+    bundle_id: &str,
+    model_id: &str,
+    input_data_offset: u32,
+    input_data: &[u8],
+) -> Result<(), MlCoordError> {
+    cantrip_mlcoord_request(&MlCoordRequest::SetInput {
+        bundle_id,
+        model_id,
+        input_data_offset,
+        input_data,
+    })
 }
 
 /// Waits for the next pending job for the client. If a job completes

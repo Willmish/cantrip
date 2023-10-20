@@ -257,6 +257,18 @@ pub fn tcm_read(src: usize, src_len: usize, dest: &mut [u8; MAX_OUTPUT_DATA]) {
     dest[..count].copy_from_slice(unsafe { &get_tcm_mut()[tcm_offset..tcm_offset + count] });
 }
 
+/// Writes |src_data| starting at |dst|.
+pub fn tcm_write(dst: usize, src_data: &[u8]) {
+    trace!("Writing {} bytes {:#x}", src_data.len(), dst);
+
+    assert!(dst >= TCM_PADDR);
+    assert!(dst + src_data.len() <= TCM_PADDR + TCM_SIZE);
+
+    let tcm_offset = dst - TCM_PADDR;
+    let tcm_slice = unsafe { get_tcm_mut() };
+    tcm_slice[tcm_offset..tcm_offset + src_data.len()].copy_from_slice(src_data);
+}
+
 // Interrupts are write 1 to clear.
 pub fn clear_host_req() { vc_top::set_intr_state(vc_top::get_intr_state().with_host_req(true)); }
 pub fn clear_finish() { vc_top::set_intr_state(vc_top::get_intr_state().with_finish(true)); }
@@ -276,7 +288,7 @@ fn clear_section(start: u32, end: u32) {
 }
 
 /// Zeroes out |byte_length| bytes starting at |addr|.
-pub fn clear_tcm(addr: usize, byte_length: usize) {
+pub fn tcm_clear(addr: usize, byte_length: usize) {
     assert!(addr >= TCM_PADDR);
     assert!(addr + byte_length <= TCM_PADDR + TCM_SIZE);
 
@@ -325,4 +337,13 @@ pub fn get_output_header(data_top_addr: usize, sizes: &ImageSizes) -> OutputHead
         output_length: springbok_header.output_length,
         epc: Some(springbok_header.epc),
     }
+}
+
+/// Returns the loaded model's input parameters.
+pub fn get_input_params() -> Result<(u32, u32), MlCoordError> {
+    Ok((0, 0)) // TODO(sleffler): worth fixing?
+}
+
+pub fn set_input_data(_input_data_offset: usize, _input_data: &[u8]) -> Result<(), MlCoordError> {
+    Err(MlCoordError::NoOutputHeader) // TODO(sleffler): add new code?
 }
