@@ -27,7 +27,7 @@ hashbrown = { version = "0.11", features = ["ahash-compile-time-rng"] }
 cantrip-memory-interface = { path = "../../MemoryManager/cantrip-memory-interface" }
 cantrip-os-common = { path = "../../cantrip-os-common" }
 cantrip-security-interface = { path = "../cantrip-security-interface" }
-cpio = { path = "../../../../../../../crates/cpio", optional = true }
+cpio = { git = "https://github.com/rcore-os/cpio", version = "0.1.0", optional = true }
 log = { version = "0.4", features = ["release_max_level_info"] }
 mailbox-driver = { path  = "../mailbox-driver", optional = true }
 postcard = { version = "0.7", features = ["alloc"], default-features = false }
