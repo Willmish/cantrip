@@ -33,7 +33,7 @@ CONFIG_PLAT_NEXUS = ["timer_support", "ml_support"]
 [dependencies]
 bitvec = { version = "1.0", default-features = false }
 cfg-if = "1.0"
-hashbrown = { version = "0.11", features = ["ahash-compile-time-rng"] }
+hashbrown = { version = "0.14.2" }
 cantrip-ml-interface = { path = "../../MlCoordinator/cantrip-ml-interface", optional = true }
 cantrip-os-common = { path = "../../cantrip-os-common" }
 cantrip-security-interface = { path = "../../SecurityCoordinator/cantrip-security-interface" }
