@@ -18,11 +18,11 @@ again.
 ## Code Reviews
 
 All submissions, including submissions by project members, require review. We
-use GitHub pull requests for this purpose. Consult
-[GitHub Help](https://help.github.com/articles/about-pull-requests/) for more
-information on using pull requests.
+use Gerrit code review for this purpose. Consult
+[Gerrit User Guide](https://gerrit-documentation.storage.googleapis.com/Documentation/3.8.2/intro-user.html)
+for more information.
 
 ## Community Guidelines
 
-This project follows [Google's Open Source Community
-Guidelines](https://opensource.google/conduct/).
+This project follows
+[Google's Open Source Community Guidelines](https://opensource.google/conduct/).
