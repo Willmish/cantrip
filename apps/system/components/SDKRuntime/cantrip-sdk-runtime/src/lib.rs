@@ -22,6 +22,7 @@ use cantrip_sdk_manager::SDKManagerInterface;
 use sdk_interface::error::SDKError;
 use sdk_interface::KeyValueData;
 use sdk_interface::ModelId;
+use sdk_interface::ModelInput;
 use sdk_interface::ModelMask;
 use sdk_interface::ModelOutput;
 use sdk_interface::SDKAppId;
@@ -160,5 +161,27 @@ impl SDKRuntimeInterface for Guard<'_> {
     }
     fn model_output(&mut self, app_id: SDKAppId, id: ModelId) -> Result<ModelOutput, SDKError> {
         self.runtime.as_mut().unwrap().model_output(app_id, id)
+    }
+    fn model_get_input_params(
+        &mut self,
+        app_id: SDKAppId,
+        model_id: &str,
+    ) -> Result<(ModelId, ModelInput), SDKError> {
+        self.runtime
+            .as_mut()
+            .unwrap()
+            .model_get_input_params(app_id, model_id)
+    }
+    fn model_set_input(
+        &mut self,
+        app_id: SDKAppId,
+        id: ModelId,
+        input_data_offset: u32,
+        input_data: &[u8],
+    ) -> Result<(), SDKError> {
+        self.runtime
+            .as_mut()
+            .unwrap()
+            .model_set_input(app_id, id, input_data_offset, input_data)
     }
 }

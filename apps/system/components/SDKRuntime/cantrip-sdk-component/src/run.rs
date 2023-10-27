@@ -354,6 +354,12 @@ impl SdkRuntimeControlThread {
             SDKRuntimeRequest::GetModelOutput => {
                 Self::model_output_request(app_id, request_slice, reply_slice)
             }
+            SDKRuntimeRequest::GetModelInputParams => {
+                Self::model_get_input_params_request(app_id, request_slice, reply_slice)
+            }
+            SDKRuntimeRequest::SetModelInput => {
+                Self::model_set_input_request(app_id, request_slice, reply_slice)
+            }
         }
     }
 
@@ -543,6 +549,39 @@ impl SdkRuntimeControlThread {
         )
         .map_err(serialize_failure)?;
         Ok(())
+    }
+
+    fn model_get_input_params_request(
+        app_id: SDKAppId,
+        request_slice: &[u8],
+        reply_slice: &mut [u8],
+    ) -> Result<(), SDKError> {
+        let request =
+            postcard::from_bytes::<sdk_interface::ModelGetInputParamsRequest>(request_slice)
+                .map_err(deserialize_failure)?;
+        let (id, input_params) = cantrip_sdk().model_get_input_params(app_id, request.model_id)?;
+        let _ = postcard::to_slice(
+            &sdk_interface::ModelGetInputParamsResponse { id, input_params },
+            reply_slice,
+        )
+        .map_err(serialize_failure)?;
+        Ok(())
+    }
+
+    fn model_set_input_request(
+        app_id: SDKAppId,
+        request_slice: &[u8],
+        _reply_slice: &mut [u8],
+    ) -> Result<(), SDKError> {
+        let request = postcard::from_bytes::<sdk_interface::ModelSetInputRequest>(request_slice)
+            .map_err(deserialize_failure)?;
+        // NB: referencing input_data in the ipc buffer is safe
+        cantrip_sdk().model_set_input(
+            app_id,
+            request.id,
+            request.input_data_offset,
+            request.input_data,
+        )
     }
 }
 

@@ -38,6 +38,8 @@ cfg_if! {
         use cantrip_ml_interface::cantrip_mlcoord_poll;
         use cantrip_ml_interface::cantrip_mlcoord_wait;
         use cantrip_ml_interface::cantrip_mlcoord_get_output;
+        use cantrip_ml_interface::cantrip_mlcoord_get_input_params;
+        use cantrip_ml_interface::cantrip_mlcoord_set_input;
         use cantrip_ml_interface::MlCoordError;
     }
 }
@@ -55,6 +57,7 @@ use log::{info, trace};
 use sdk_interface::error::SDKError;
 use sdk_interface::KeyValueData;
 use sdk_interface::ModelId;
+use sdk_interface::ModelInput;
 use sdk_interface::ModelMask;
 use sdk_interface::ModelOutput;
 use sdk_interface::SDKAppId;
@@ -111,18 +114,21 @@ const NO_TIMER: TimerState = TimerState::None; // NB: for initializing timer_sta
 #[derive(PartialEq)]
 enum ModelState {
     None,
+    Idle(String),    // Model may be loaded but not running
     Oneshot(String), // XXX maybe SmallString
     Periodic(String),
 }
+#[allow(dead_code)]
 impl ModelState {
-    #[allow(dead_code)]
     pub fn get_name(&self) -> Option<&str> {
         match self {
             ModelState::None => None,
+            ModelState::Idle(name) => Some(name),
             ModelState::Oneshot(name) => Some(name),
             ModelState::Periodic(name) => Some(name),
         }
     }
+    pub fn is_idle(&self) -> bool { matches!(self, ModelState::Idle(_)) }
 }
 
 // Per-app runtime state (mostly)  for tracking asynchronous activities:
@@ -187,8 +193,11 @@ impl SDKRuntimeState {
     // (and ignore multiple apps running simultaneously)..
     pub fn process_completed_jobs(&mut self, mask: ModelMask) -> ModelMask {
         if (mask & (1 << MODEL_ID)) != 0 {
-            if let ModelState::Oneshot(_) = self.model_state {
-                self.model_state = ModelState::None;
+            if let ModelState::Oneshot(name) = &self.model_state {
+                // XXX is this safe or do we need to go to None;
+                // the latter would require doing a get_input_params
+                // before every or using a model name instead of id
+                self.model_state = ModelState::Idle(name.clone());
             }
         }
         mask
@@ -595,6 +604,7 @@ impl SDKRuntimeInterface for SDKRuntime {
         {
             cantrip_mlcoord_cancel(&app.app_id, app.model_state.get_name().unwrap())
                 .map_err(map_ml_err)?;
+            // XXX Idle?
             app.model_state = ModelState::None;
             Ok(())
         }
@@ -657,6 +667,64 @@ impl SDKRuntimeInterface for SDKRuntime {
                     epc: output.epc,
                     data: output.data,
                 })
+        }
+
+        #[cfg(not(feature = "ml_support"))]
+        Err(SDKError::NoPlatformSupport)
+    }
+
+    #[allow(unused_variables)]
+    fn model_get_input_params(
+        &mut self,
+        app_id: SDKAppId,
+        model_id: &str,
+    ) -> Result<(ModelId, ModelInput), SDKError> {
+        trace!("model_get_input_params {}", model_id);
+        let app = self.get_mut_app(app_id)?;
+        #[cfg(feature = "ml_support")]
+        {
+            let mlinput =
+                cantrip_mlcoord_get_input_params(&app.app_id, model_id).map_err(map_ml_err)?;
+            app.model_state = ModelState::Idle(model_id.into());
+            Ok((
+                MODEL_ID,
+                ModelInput {
+                    input_ptr: mlinput.input_ptr,
+                    input_size_bytes: mlinput.input_size_bytes,
+                },
+            ))
+        }
+
+        #[cfg(not(feature = "ml_support"))]
+        Err(SDKError::NoPlatformSupport)
+    }
+
+    #[allow(unused_variables)]
+    fn model_set_input(
+        &mut self,
+        app_id: SDKAppId,
+        id: ModelId,
+        input_data_offset: u32,
+        input_data: &[u8],
+    ) -> Result<(), SDKError> {
+        trace!("model_set_input {id} {input_data_offset} {:x?}", input_data);
+        let app = self.get_mut_app(app_id)?;
+        if id != MODEL_ID {
+            return Err(SDKError::NoSuchModel);
+        }
+        // Require model to be loaded+stopped; this may be too conservative.
+        if !app.model_state.is_idle() {
+            return Err(SDKError::NoSuchModel); // XXX need is running error
+        }
+        #[cfg(feature = "ml_support")]
+        {
+            cantrip_mlcoord_set_input(
+                &app.app_id,
+                app.model_state.get_name().unwrap(),
+                input_data_offset,
+                input_data,
+            )
+            .map_err(map_ml_err)
         }
 
         #[cfg(not(feature = "ml_support"))]

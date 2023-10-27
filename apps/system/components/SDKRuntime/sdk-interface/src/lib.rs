@@ -149,6 +149,12 @@ pub struct ModelOutput {
     pub data: [u8; MAX_OUTPUT_DATA],
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ModelInput {
+    pub input_ptr: u32,
+    pub input_size_bytes: u32,
+}
+
 /// SDKRuntimeRequest::OneshotModel
 #[derive(Serialize, Deserialize)]
 pub struct ModelOneshotRequest<'a> {
@@ -191,6 +197,25 @@ pub struct ModelOutputResponse {
     pub output: ModelOutput,
 }
 
+/// SDKRuntimeRequest::GetModelInputParams
+#[derive(Serialize, Deserialize)]
+pub struct ModelGetInputParamsRequest<'a> {
+    pub model_id: &'a str,
+}
+#[derive(Serialize, Deserialize)]
+pub struct ModelGetInputParamsResponse {
+    pub id: ModelId,
+    pub input_params: ModelInput,
+}
+
+/// SDKRuntimeRequest::SetModelInput
+#[derive(Serialize, Deserialize)]
+pub struct ModelSetInputRequest<'a> {
+    pub id: ModelId,
+    pub input_data_offset: u32,
+    pub input_data: &'a [u8],
+}
+
 /// SDKRequest token sent over the seL4 IPC interface. We need repr(seL4_Word)
 /// but cannot use that so use the implied usize type instead.
 ///
@@ -213,12 +238,14 @@ pub enum SDKRuntimeRequest {
     WaitForTimers, // Wait for timers to expire: [] -> TimerMask
     PollForTimers, // Poll for timers to expire: [] -> TimerMask
 
-    OneshotModel,   // One-shot model execution: [model_id: &str] -> id: ModelId
+    OneshotModel,        // One-shot model execution: [model_id: &str] -> id: ModelId
     PeriodicModel, // Periodic model execution: [model_id: &str, duration_ms: TimerDuration] -> ModelId
     CancelModel,   // Cancel running model: [id: ModelId]
     WaitForModel,  // Wait for any running model to complete: [] -> ModelMask
     PollForModels, // Poll for running models to complete: [] -> ModelMask
     GetModelOutput, // Return output data from most recent run: [id: ModelId, clear: bool] -> ModelOutput
+    GetModelInputParams, // Load model & return input data params: [model_id: &str] -> (ModelId, ModelInput)
+    SetModelInput, // Set input data for loaded model: [id: ModelId, input_data_offset: u32, input_data: &[u8]
 }
 
 /// Rust interface for the SDKRuntime.
@@ -287,6 +314,20 @@ pub trait SDKRuntimeInterface {
     fn model_poll(&mut self, app_id: SDKAppId) -> Result<ModelMask, SDKError>;
     /// Retrieve the output from the last run of model |id|.
     fn model_output(&mut self, app_id: SDKAppId, id: ModelId) -> Result<ModelOutput, SDKError>;
+    /// Loads |model_id| and retrieves the input parameters.
+    fn model_get_input_params(
+        &mut self,
+        app_id: SDKAppId,
+        model_id: &str,
+    ) -> Result<(ModelId, ModelInput), SDKError>;
+    /// Set input data for the next run of model |id|.
+    fn model_set_input(
+        &mut self,
+        app_id: SDKAppId,
+        id: ModelId,
+        input_data_offset: u32,
+        input_data: &[u8],
+    ) -> Result<(), SDKError>;
 }
 
 /// Rust client-side request processing. Note there is no CAmkES stub to
@@ -497,4 +538,33 @@ pub fn sdk_model_output(id: ModelId) -> Result<ModelOutput, SDKRuntimeError> {
         &ModelOutputRequest { id },
     )?;
     Ok(response.output)
+}
+
+/// Rust client-side wrapper for the model_get_input_params method.
+#[inline]
+pub fn sdk_model_get_input_params(
+    model_id: &str,
+) -> Result<(ModelId, ModelInput), SDKRuntimeError> {
+    let response = sdk_request::<ModelGetInputParamsRequest, ModelGetInputParamsResponse>(
+        SDKRuntimeRequest::GetModelInputParams,
+        &ModelGetInputParamsRequest { model_id },
+    )?;
+    Ok((response.id, response.input_params))
+}
+
+/// Rust client-side wrapper for the model_set_input method.
+#[inline]
+pub fn sdk_model_set_input(
+    id: ModelId,
+    input_data_offset: u32,
+    input_data: &[u8],
+) -> Result<(), SDKRuntimeError> {
+    sdk_request::<ModelSetInputRequest, ()>(
+        SDKRuntimeRequest::SetModelInput,
+        &ModelSetInputRequest {
+            id,
+            input_data_offset,
+            input_data,
+        },
+    )
 }
