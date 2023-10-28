@@ -111,7 +111,8 @@ pub struct GetOutputResponse {
     pub output: MlOutput,
 }
 
-pub const MLCOORD_REQUEST_DATA_SIZE: usize = 100;
+// NB: selected s.t. MlOutput (MAX_OUTPUT_DATA) + MlInput (MAX_INPUT_DATA) work
+pub const MLCOORD_REQUEST_DATA_SIZE: usize = rpc_basic::RPC_BUFFER_SIZE_BYTES / 2;
 
 #[inline]
 fn cantrip_mlcoord_request<T: DeserializeOwned>(
