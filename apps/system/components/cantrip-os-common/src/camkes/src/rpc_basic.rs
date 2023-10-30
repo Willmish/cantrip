@@ -31,6 +31,9 @@ use sel4_sys::seL4_ReplyRecv;
 use sel4_sys::seL4_Send;
 use sel4_sys::seL4_Word;
 
+/// Size (bytes) of basic RPC buffer (typically 480 bytes).
+pub const RPC_BUFFER_SIZE_BYTES: usize = sel4_sys::seL4_MsgMaxLength * size_of::<seL4_Word>();
+
 /// Returns a reference to the per-thread IPCBuffer for processing RPC parameters.
 /// This is safe to use when the buffer is not re-used before the RPC completes
 /// (usually easy to guarantee on the client side but can be problematic on the

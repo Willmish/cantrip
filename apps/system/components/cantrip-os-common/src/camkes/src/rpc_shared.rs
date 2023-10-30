@@ -23,6 +23,7 @@ use core::convert::From;
 use sel4_sys::seL4_CPtr;
 use sel4_sys::seL4_Call;
 use sel4_sys::seL4_MessageInfo;
+use sel4_sys::seL4_PageBits;
 use sel4_sys::seL4_Recv;
 use sel4_sys::seL4_ReplyRecv;
 use sel4_sys::seL4_Send;
@@ -31,6 +32,9 @@ use sel4_sys::seL4_Word;
 /// Server-side interface to get the shared page for the client with
 /// the specified badge.
 pub type GetRecvBuffer = fn(seL4_Word) -> &'static mut [u8];
+
+/// Size (bytes) of shared memory RPC buffer.
+pub const RPC_BUFFER_SIZE_BYTES: usize = 1 << seL4_PageBits;
 
 /// Returns a reference to the per-thread shared page for processing RPC parameters.
 /// CAmkES sets up a page that is shared between client & server for each endpoint.
