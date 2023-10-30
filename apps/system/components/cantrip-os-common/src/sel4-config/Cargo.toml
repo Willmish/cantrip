@@ -8,4 +8,4 @@ description = "build glue for seL4 kernel configuration"
 path = "src/lib.rs"
 
 [dependencies]
-cargo_toml = "0.10.2"
+cargo_toml = "0.17"
