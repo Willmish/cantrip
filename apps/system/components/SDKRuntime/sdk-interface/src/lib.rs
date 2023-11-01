@@ -63,7 +63,7 @@ pub const KEY_VALUE_DATA_SIZE: usize = 100;
 pub type KeyValueData = [u8; KEY_VALUE_DATA_SIZE];
 
 // TOOD(sleffler): dup's mlcoordinator but we don't want a dependency
-pub const MAX_OUTPUT_DATA: usize = 64;
+pub const MAX_OUTPUT_DATA: usize = 128;
 
 /// Core api's
 

@@ -32,8 +32,7 @@ pub type MlJobMask = u32;
 use serde_big_array::big_array;
 big_array! { BigArray; }
 
-// TODO(sleffler): too small for planned demo's
-pub const MAX_OUTPUT_DATA: usize = 64;
+pub const MAX_OUTPUT_DATA: usize = 128;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MlOutput {
