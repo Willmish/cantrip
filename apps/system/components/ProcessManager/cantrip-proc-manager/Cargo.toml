@@ -33,6 +33,8 @@ CONFIG_KERNEL_MCS = []
 CONFIG_SMP_SUPPORT = []
 
 [dependencies]
+ahash = { version = "0.8.6", default-features = false, features = ["compile-time-rng"] }
+const-random = { version = "0.1.17" }
 crc = { version = "1.4.0", default-features = false, optional = true }
 cstr_core = "0.2.3"
 hashbrown = { version = "0.14.2" }

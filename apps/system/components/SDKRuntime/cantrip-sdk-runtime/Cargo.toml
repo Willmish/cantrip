@@ -31,14 +31,16 @@ CONFIG_PLAT_NEXUS = ["timer_support", "ml_support"]
 
 
 [dependencies]
+ahash = { version = "0.8.6", default-features = false, features = ["compile-time-rng"] }
 bitvec = { version = "1.0", default-features = false }
 cfg-if = "1.0"
-hashbrown = { version = "0.14.2" }
+const-random = { version = "0.1.17" }
 cantrip-ml-interface = { path = "../../MlCoordinator/cantrip-ml-interface", optional = true }
 cantrip-os-common = { path = "../../cantrip-os-common" }
 cantrip-security-interface = { path = "../../SecurityCoordinator/cantrip-security-interface" }
 cantrip-timer-interface = { path = "../../TimerService/cantrip-timer-interface", optional = true }
 cantrip-sdk-manager = { path = "../cantrip-sdk-manager" }
+hashbrown = { version = "0.14.2" }
 log = { version = "0.4", features = ["release_max_level_info"] }
 sdk-interface = { path = "../sdk-interface" }
 smallstr = "0.2"
