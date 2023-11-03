@@ -124,7 +124,7 @@ mod tests {
         let mut buffer = Buffer::new();
         // Fill buffer to max capacity with u8s.
         for i in 0..BUFFER_CAPACITY {
-            buffer.push((i % BUFFER_CAPACITY) as u8);
+            assert!(buffer.push((i % BUFFER_CAPACITY) as u8));
         }
         assert_eq!(BUFFER_CAPACITY, buffer.size);
         assert!(!buffer.push(1));
@@ -138,7 +138,7 @@ mod tests {
         assert!(buffer.push(1));
         assert_eq!(Some(1), buffer.pop());
         for i in 0..BUFFER_CAPACITY {
-            buffer.push((i % BUFFER_CAPACITY) as u8);
+            assert!(buffer.push((i % BUFFER_CAPACITY) as u8));
         }
         assert_eq!(BUFFER_CAPACITY, buffer.size);
         assert_eq!(0, buffer.available_data());
