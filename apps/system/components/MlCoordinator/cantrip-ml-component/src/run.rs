@@ -118,12 +118,14 @@ impl CamkesThreadInterface for TimerInterfaceThread {
     }
 }
 
+type MlCoordResult = Result<(), MlCoordError>;
+
 struct MlcoordInterfaceThread;
 impl CamkesThreadInterface for MlcoordInterfaceThread {
     fn run() {
         ML_COORD.lock().init();
 
-        rpc_basic_recv!(mlcoord, MLCOORD_REQUEST_DATA_SIZE, MlCoordError::Success);
+        rpc_shared_recv!(mlcoord, MLCOORD_REQUEST_DATA_SIZE, MlCoordError::Success);
     }
 }
 impl MlcoordInterfaceThread {
@@ -131,7 +133,7 @@ impl MlcoordInterfaceThread {
         client_badge: usize,
         request_buffer: &[u8],
         reply_buffer: &mut [u8],
-    ) -> Result<usize, MlCoordError> {
+    ) -> MlCoordResult {
         let _cleanup = Camkes::cleanup_request_cap();
         let request = match postcard::from_bytes::<MlCoordRequest>(request_buffer) {
             Ok(request) => request,
@@ -172,26 +174,26 @@ impl MlcoordInterfaceThread {
         }
     }
 
-    fn completed_jobs_request(reply_buffer: &mut [u8]) -> Result<usize, MlCoordError> {
+    fn completed_jobs_request(reply_buffer: &mut [u8]) -> MlCoordResult {
         let job_mask = ML_COORD.lock().completed_jobs();
-        let reply_slice = postcard::to_slice(&CompleteJobsResponse { job_mask }, reply_buffer)
+        let _ = postcard::to_slice(&CompleteJobsResponse { job_mask }, reply_buffer)
             .or(Err(MlCoordError::SerializeError))?;
-        Ok(reply_slice.len())
+        Ok(())
     }
 
     fn get_output_request(
         bundle_id: &str,
         model_id: &str,
         reply_buffer: &mut [u8],
-    ) -> Result<usize, MlCoordError> {
+    ) -> MlCoordResult {
         let image_id = ImageId {
             bundle_id: bundle_id.to_string(),
             model_id: model_id.to_string(),
         };
         let output = ML_COORD.lock().get_output(&image_id)?;
-        let reply_slice = postcard::to_slice(&GetOutputResponse { output }, reply_buffer)
+        let _ = postcard::to_slice(&GetOutputResponse { output }, reply_buffer)
             .or(Err(MlCoordError::SerializeError))?;
-        Ok(reply_slice.len())
+        Ok(())
     }
 
     fn get_input_params_request(
@@ -199,15 +201,15 @@ impl MlcoordInterfaceThread {
         bundle_id: &str,
         model_id: &str,
         reply_buffer: &mut [u8],
-    ) -> Result<usize, MlCoordError> {
+    ) -> MlCoordResult {
         let image_id = ImageId {
             bundle_id: bundle_id.to_string(),
             model_id: model_id.to_string(),
         };
         let input = ML_COORD.lock().get_input_params(client_badge, image_id)?;
-        let reply_slice = postcard::to_slice(&GetInputParamsResponse { input }, reply_buffer)
+        let _ = postcard::to_slice(&GetInputParamsResponse { input }, reply_buffer)
             .or(Err(MlCoordError::SerializeError))?;
-        Ok(reply_slice.len())
+        Ok(())
     }
 
     fn set_input_request(
@@ -215,28 +217,22 @@ impl MlcoordInterfaceThread {
         model_id: &str,
         input_data_offset: u32,
         input_data: &[u8],
-    ) -> Result<usize, MlCoordError> {
+    ) -> MlCoordResult {
         let image_id = ImageId {
             bundle_id: bundle_id.to_string(),
             model_id: model_id.to_string(),
         };
         ML_COORD
             .lock()
-            .set_input(&image_id, input_data_offset, input_data)?;
-        Ok(0)
+            .set_input(&image_id, input_data_offset, input_data)
     }
 
-    fn oneshot_request(
-        client_badge: usize,
-        bundle_id: &str,
-        model_id: &str,
-    ) -> Result<usize, MlCoordError> {
+    fn oneshot_request(client_badge: usize, bundle_id: &str, model_id: &str) -> MlCoordResult {
         let image_id = ImageId {
             bundle_id: bundle_id.to_string(),
             model_id: model_id.to_string(),
         };
-        ML_COORD.lock().oneshot(client_badge, image_id)?;
-        Ok(0)
+        ML_COORD.lock().oneshot(client_badge, image_id)
     }
 
     fn periodic_request(
@@ -244,33 +240,29 @@ impl MlcoordInterfaceThread {
         bundle_id: &str,
         model_id: &str,
         rate_in_ms: u32,
-    ) -> Result<usize, MlCoordError> {
+    ) -> MlCoordResult {
         let image_id = ImageId {
             bundle_id: bundle_id.to_string(),
             model_id: model_id.to_string(),
         };
-        ML_COORD
-            .lock()
-            .periodic(client_badge, image_id, rate_in_ms)?;
-        Ok(0)
+        ML_COORD.lock().periodic(client_badge, image_id, rate_in_ms)
     }
 
-    fn cancel_request(bundle_id: &str, model_id: &str) -> Result<usize, MlCoordError> {
+    fn cancel_request(bundle_id: &str, model_id: &str) -> MlCoordResult {
         let image_id = ImageId {
             bundle_id: bundle_id.to_string(),
             model_id: model_id.to_string(),
         };
-        ML_COORD.lock().cancel(&image_id)?;
-        Ok(0)
+        ML_COORD.lock().cancel(&image_id)
     }
 
-    fn debug_state_request() -> Result<usize, MlCoordError> {
+    fn debug_state_request() -> MlCoordResult {
         ML_COORD.lock().debug_state();
-        Ok(0)
+        Ok(())
     }
 
-    fn capscan_request() -> Result<usize, MlCoordError> {
+    fn capscan_request() -> MlCoordResult {
         let _ = Camkes::capscan();
-        Ok(0)
+        Ok(())
     }
 }

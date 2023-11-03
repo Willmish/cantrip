@@ -146,17 +146,17 @@ pub struct GetInputParamsResponse {
 }
 
 // NB: selected s.t. MlOutput (MAX_OUTPUT_DATA) + MlInput (MAX_INPUT_DATA) work
-pub const MLCOORD_REQUEST_DATA_SIZE: usize = rpc_basic::RPC_BUFFER_SIZE_BYTES / 2;
+pub const MLCOORD_REQUEST_DATA_SIZE: usize = rpc_shared::RPC_BUFFER_SIZE_BYTES / 2;
 
 #[inline]
 fn cantrip_mlcoord_request<T: DeserializeOwned>(
     request: &MlCoordRequest,
 ) -> Result<T, MlCoordError> {
     trace!("cantrip_mlcoord_request {:?}", &request);
-    let (request_buffer, reply_slice) = rpc_basic_buffer!().split_at_mut(MLCOORD_REQUEST_DATA_SIZE);
-    let request_slice =
-        postcard::to_slice(request, request_buffer).or(Err(MlCoordError::SerializeError))?;
-    match rpc_basic_send!(mlcoord, request_slice.len()).0.into() {
+    let (request_buffer, reply_slice) =
+        rpc_shared_buffer_mut!(mlcoord).split_at_mut(MLCOORD_REQUEST_DATA_SIZE);
+    let _ = postcard::to_slice(request, request_buffer).or(Err(MlCoordError::SerializeError))?;
+    match rpc_shared_send!(mlcoord, None).into() {
         MlCoordError::Success => {
             let reply =
                 postcard::from_bytes(reply_slice).or(Err(MlCoordError::DeserializeError))?;

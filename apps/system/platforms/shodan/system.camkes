@@ -139,7 +139,7 @@ assembly {
         // Hookup ProcessManager to DebugConsole for shell commands.
         connection cantripRPCCall shell_process(from debug_console.proc_ctrl,
                                              to process_manager.proc_ctrl);
-        connection cantripRPCCallSignal shell_ml(from debug_console.mlcoord,
+        connection cantripRPCSignalOverMultiSharedData shell_ml(from debug_console.mlcoord,
                                         from sdk_runtime.mlcoord, // XXX split out?
                                         to ml_coordinator.mlcoord);
 
