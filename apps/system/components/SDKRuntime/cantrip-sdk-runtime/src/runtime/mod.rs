@@ -18,6 +18,7 @@
 use cfg_if::cfg_if;
 
 extern crate alloc;
+use alloc::boxed::Box;
 use alloc::string::String;
 use bitvec::prelude::*;
 use cantrip_os_common::camkes::seL4_CPath;
@@ -91,6 +92,11 @@ const MODEL_ID: ModelId = 31;
 // Max TimerId an application can use.
 const MAX_TIMER_ID: TimerId = (MODEL_ID - 1) as TimerId;
 
+// Size of audio recording buffer. This holds samples to be returned to
+// a user via an |audio_record_collect| call. The buffer is allocated on
+// the heap while actively recording.
+const AUDIO_RECORD_CAPACITY: usize = 1024; // XXX maybe match i2s::buffer::BUFFER_CAPACITY
+
 #[allow(dead_code)]
 #[derive(PartialEq)]
 enum TimerState {
@@ -131,6 +137,46 @@ impl ModelState {
     pub fn is_idle(&self) -> bool { matches!(self, ModelState::Idle(_)) }
 }
 
+#[allow(dead_code)]
+#[derive(PartialEq)]
+enum AudioRecordState {
+    Idle,
+    Recording(Box<[u8; AUDIO_RECORD_CAPACITY]>),
+}
+#[allow(dead_code)]
+impl AudioRecordState {
+    pub fn is_idle(&self) -> bool { matches!(self, AudioRecordState::Idle) }
+    pub fn is_recording(&self) -> bool { matches!(self, AudioRecordState::Recording(_)) }
+    pub fn get_data(&self, max_data: usize) -> &[u8] {
+        match self {
+            AudioRecordState::Recording(data) => {
+                &data[..core::cmp::min(max_data, AUDIO_RECORD_CAPACITY)]
+            }
+            _ => unimplemented!(),
+        }
+    }
+    pub fn get_data_mut(&mut self, max_data: usize) -> &mut [u8] {
+        match self {
+            AudioRecordState::Recording(data) => {
+                &mut data[..core::cmp::min(max_data, AUDIO_RECORD_CAPACITY)]
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(PartialEq)]
+enum AudioPlayState {
+    Idle,
+    Playing,
+}
+#[allow(dead_code)]
+impl AudioPlayState {
+    pub fn is_idle(&self) -> bool { matches!(self, AudioPlayState::Idle) }
+    pub fn is_playing(&self) -> bool { matches!(self, AudioPlayState::Playing) }
+}
+
 // Per-app runtime state (mostly)  for tracking asynchronous activities:
 // running models and timers. Only one running model is supported. Up to
 // MAX_TIMER_ID timers may active but timers are shared betweenn applications
@@ -140,6 +186,8 @@ impl ModelState {
 struct SDKRuntimeState {
     app_id: SmallId,
     model_state: ModelState,
+    audio_record_state: AudioRecordState,
+    audio_play_state: AudioPlayState,
     timer_state: [TimerState; MAX_TIMER_ID as usize + 1],
     // Bitmask of runtime timer id's; use native bit order because the
     // underlying u32 is used directly in timer_wait & timer_poll.
@@ -151,6 +199,8 @@ impl SDKRuntimeState {
         Self {
             app_id: SmallId::from_str(app_id),
             model_state: ModelState::None,
+            audio_record_state: AudioRecordState::Idle,
+            audio_play_state: AudioPlayState::Idle,
             timer_state: [NO_TIMER; MAX_TIMER_ID as usize + 1],
             sdk_timer_mask: BitArray::ZERO,
         }
@@ -370,6 +420,13 @@ impl SDKManagerInterface for SDKRuntime {
             for timer_id in app.timer_id_iter() {
                 let _ = cantrip_timer_cancel(timer_id);
                 self.release_id(timer_id);
+            }
+            #[cfg(feature = "audio_support")]
+            {
+                let _ = i2s_driver::audio_reset(
+                    /*rxrst=*/ true, /*txrst=*/ true, /*rxilvl=*/ 1,
+                    /*txilvl=*/ 1,
+                );
             }
         } else {
             // NB: assumed to be compiled out in release build (no DDOS).
@@ -729,6 +786,142 @@ impl SDKRuntimeInterface for SDKRuntime {
 
         #[cfg(not(feature = "ml_support"))]
         Err(SDKError::NoPlatformSupport)
+    }
+
+    #[allow(unused_variables)]
+    fn audio_reset(
+        &mut self,
+        app_id: SDKAppId,
+        rxrst: bool,
+        txrst: bool,
+        rxilvl: u8,
+        txilvl: u8,
+    ) -> Result<(), SDKError> {
+        trace!("audio_reset rx {rxrst} {rxilvl} tx {txrst} {txilvl}");
+        let app = self.get_mut_app(app_id)?;
+        cfg_if! {
+            if #[cfg(feature = "audio_support")] {
+                i2s_driver::audio_reset(rxrst, txrst, rxilvl, txilvl)?;
+                if rxrst {
+                    app.audio_record_state = AudioRecordState::Idle;
+                }
+                if txrst {
+                    app.audio_play_state = AudioPlayState::Idle;
+                }
+                Ok(())
+            } else {
+                Err(SDKError::NoPlatformSupport)
+            }
+        }
+    }
+    #[allow(unused_variables)]
+    fn audio_record_start(
+        &mut self,
+        app_id: SDKAppId,
+        rate: usize,
+        buffer_size: usize,
+        stop_on_full: bool,
+    ) -> Result<(), SDKError> {
+        trace!("audio_record_start {rate} {buffer_size} {stop_on_full}");
+        let app = self.get_mut_app(app_id)?;
+        cfg_if! {
+            if #[cfg(feature = "audio_support")] {
+                i2s_driver::audio_record_start(rate, buffer_size, stop_on_full)?;
+                // XXX buffer_size
+                // XXX new_uninit
+                app.audio_record_state = AudioRecordState::Recording(Box::new([0u8; AUDIO_RECORD_CAPACITY]));
+                Ok(())
+            } else {
+                Err(SDKError::NoPlatformSupport)
+            }
+        }
+    }
+    #[allow(unused_variables)]
+    fn audio_record_collect(
+        &mut self,
+        app_id: SDKAppId,
+        max_data: usize,
+        wait_if_empty: bool,
+    ) -> Result<&[u8], SDKError> {
+        trace!("audio_record_collect {max_data}");
+        let app = self.get_mut_app(app_id)?;
+        if !app.audio_record_state.is_recording() {
+            return Err(SDKError::InvalidAudioState);
+        }
+        cfg_if! {
+            if #[cfg(feature = "audio_support")] {
+                let data = app.audio_record_state.get_data_mut(max_data);
+                // XXX pin?
+                let count = i2s_driver::audio_record_collect(data, wait_if_empty)?;
+                Ok(&data[..count])
+            } else {
+                Err(SDKError::NoPlatformSupport)
+            }
+        }
+    }
+    #[allow(unused_variables)]
+    fn audio_record_stop(&mut self, app_id: SDKAppId) -> Result<(), SDKError> {
+        trace!("audio_record_stop");
+        let app = self.get_mut_app(app_id)?;
+        cfg_if! {
+            if #[cfg(feature = "audio_support")] {
+                i2s_driver::audio_record_stop()?;
+                app.audio_record_state = AudioRecordState::Idle;
+                Ok(())
+            } else {
+                Err(SDKError::NoPlatformSupport)
+            }
+        }
+    }
+
+    #[allow(unused_variables)]
+    fn audio_play_start(
+        &mut self,
+        app_id: SDKAppId,
+        rate: usize,
+        buffer_size: usize,
+    ) -> Result<(), SDKError> {
+        trace!("audio_play_start {rate} {buffer_size}");
+        let app = self.get_mut_app(app_id)?;
+        cfg_if! {
+            if #[cfg(feature = "audio_support")] {
+                i2s_driver::audio_play_start(rate, buffer_size)?;
+                app.audio_play_state = AudioPlayState::Playing;
+                Ok(())
+            } else {
+                Err(SDKError::NoPlatformSupport)
+            }
+        }
+    }
+    #[allow(unused_variables)]
+    fn audio_play_write(&mut self, app_id: SDKAppId, data: &[u8]) -> Result<(), SDKError> {
+        trace!("audio_play_write {}", data.len());
+        let app = self.get_mut_app(app_id)?;
+        if !app.audio_play_state.is_playing() {
+            return Err(SDKError::InvalidAudioState);
+        }
+        cfg_if! {
+            if #[cfg(feature = "audio_support")] {
+                // XXX async + double-buffer?
+                i2s_driver::audio_play_write(data)
+            } else {
+                Err(SDKError::NoPlatformSupport)
+            }
+        }
+    }
+    #[allow(unused_variables)]
+    fn audio_play_stop(&mut self, app_id: SDKAppId) -> Result<(), SDKError> {
+        trace!("audio_play_stop");
+        let app = self.get_mut_app(app_id)?;
+        cfg_if! {
+            if #[cfg(feature = "audio_support")] {
+                i2s_driver::audio_play_stop()?;
+                app.audio_play_state = AudioPlayState::Idle;
+                Ok(())
+            } else {
+                Err(SDKError::NoPlatformSupport)
+            }
+        }
     }
 }
 

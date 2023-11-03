@@ -25,9 +25,10 @@ sel4-config = { path = "../../cantrip-os-common/src/sel4-config" }
 default = []
 timer_support = ["cantrip-timer-interface"]
 ml_support = ["cantrip-ml-interface"]
+audio_support = ["i2s-driver"]
 # Target platform support
-CONFIG_PLAT_SHODAN = ["timer_support", "ml_support"]
-CONFIG_PLAT_NEXUS = ["timer_support", "ml_support"]
+CONFIG_PLAT_SHODAN = ["timer_support", "ml_support", "audio_support"]
+CONFIG_PLAT_NEXUS = ["timer_support", "ml_support", "audio_support"]
 
 
 [dependencies]
@@ -41,6 +42,7 @@ cantrip-security-interface = { path = "../../SecurityCoordinator/cantrip-securit
 cantrip-timer-interface = { path = "../../TimerService/cantrip-timer-interface", optional = true }
 cantrip-sdk-manager = { path = "../cantrip-sdk-manager" }
 hashbrown = { version = "0.14.2" }
+i2s-driver = { path = "../i2s-driver", optional = true }
 log = { version = "0.4", features = ["release_max_level_info"] }
 sdk-interface = { path = "../sdk-interface" }
 smallstr = "0.2"

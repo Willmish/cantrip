@@ -216,6 +216,58 @@ pub struct ModelSetInputRequest<'a> {
     pub input_data: &'a [u8],
 }
 
+/// Audio api's
+
+/// SDKRuntimeRequest::AudioReset
+#[derive(Serialize, Deserialize)]
+pub struct AudioResetRequest {
+    pub rxrst: bool, // Reset rx
+    pub txrst: bool, // Reset tx
+    pub rxilvl: u8,  // RX fifo level (one of 1,4,8,16,30)
+    pub txilvl: u8,  // TX fifo level (one of 1,4,8,16)
+}
+
+/// SDKRuntimeRequest::AudioRecordStart
+#[derive(Serialize, Deserialize)]
+pub struct AudioRecordStartRequest {
+    pub rate: usize,
+    pub buffer_size: usize,
+    // If true, stop on buffer full, otherwise treat as a circular buffer
+    pub stop_on_full: bool,
+}
+
+/// SDKRuntimeRequest::AudioRecordCollect
+#[derive(Serialize, Deserialize)]
+pub struct AudioRecordCollectRequest {
+    pub max_data: usize,
+    pub wait_if_empty: bool, // XXX wait for fifo to reach level?
+}
+#[derive(Serialize, Deserialize)]
+pub struct AudioRecordCollectResponse<'a> {
+    pub data: &'a [u8],
+}
+
+/// SDKRuntimeRequest::AudioRecordStop
+#[derive(Serialize, Deserialize)]
+pub struct AudioRecordStopRequest {}
+
+/// SDKRuntimeRequest::AudioPlayStart
+#[derive(Serialize, Deserialize)]
+pub struct AudioPlayStartRequest {
+    pub rate: usize,
+    pub buffer_size: usize, // XXX in samples?
+}
+
+/// SDKRuntimeRequest::AudioPlayWrite
+#[derive(Serialize, Deserialize)]
+pub struct AudioPlayWriteRequest<'a> {
+    pub data: &'a [u8],
+}
+
+/// SDKRuntimeRequest::AudioPlayStop
+#[derive(Serialize, Deserialize)]
+pub struct AudioPlayStopRequest {}
+
 /// SDKRequest token sent over the seL4 IPC interface. We need repr(seL4_Word)
 /// but cannot use that so use the implied usize type instead.
 ///
@@ -246,6 +298,14 @@ pub enum SDKRuntimeRequest {
     GetModelOutput, // Return output data from most recent run: [id: ModelId, clear: bool] -> ModelOutput
     GetModelInputParams, // Load model & return input data params: [model_id: &str] -> (ModelId, ModelInput)
     SetModelInput, // Set input data for loaded model: [id: ModelId, input_data_offset: u32, input_data: &[u8]
+
+    AudioReset, // Reset audio state: [rxrst: bool, txrst: bool, rxilvl: u8, txilvl: u8]
+    AudioRecordStart, // Start recording: [rate: usize, buffer_size: usize, stop_on_full: bool]
+    AudioRecordCollect, // Collect recorded data: [max_data: usize, wait_if_empty: bool]
+    AudioRecordStop, // Stop recording (any un-collected data are discarded): []
+    AudioPlayStart, // Start playing: [rate: usize, buffer_size: usize]
+    AudioPlayWrite, // Write play samples: [data: &[u8]]
+    AudioPlayStop, // Stop playing: []
 }
 
 /// Rust interface for the SDKRuntime.
@@ -328,6 +388,49 @@ pub trait SDKRuntimeInterface {
         input_data_offset: u32,
         input_data: &[u8],
     ) -> Result<(), SDKError>;
+
+    /// Resets the audio framework.
+    fn audio_reset(
+        &mut self,
+        app_id: SDKAppId,
+        rxrst: bool, // Reset rx
+        txrst: bool, // Reset tx
+        rxilvl: u8,  // RX fifo level (one of 1,4,8,16,30)
+        txilvl: u8,  // TX fifo level (one of 1,4,8,16)
+    ) -> Result<(), SDKError>;
+    /// Start recording audio into a buffer of size |buffer_size| using
+    /// |rate| sampling. If the buffer fills before a stop request is
+    /// received recording is automatically stopped.
+    fn audio_record_start(
+        &mut self,
+        app_id: SDKAppId,
+        rate: usize,
+        buffer_size: usize,
+        stop_on_full: bool,
+    ) -> Result<(), SDKError>;
+    /// Collects data from a recording started with |audio_record_start|.
+    /// The data are returned in native (hardware) format.
+    fn audio_record_collect(
+        &mut self,
+        app_id: SDKAppId,
+        max_data: usize,
+        wait_if_empty: bool,
+    ) -> Result<&[u8], SDKError>;
+    /// Stop a recording session started with |audio_record_start|.
+    fn audio_record_stop(&mut self, app_id: SDKAppId) -> Result<(), SDKError>;
+
+    /// Start playing audio data with |rate| sampling.
+    fn audio_play_start(
+        &mut self,
+        app_id: SDKAppId,
+        rate: usize,
+        buffer_size: usize,
+    ) -> Result<(), SDKError>;
+    /// Writes data according to |audio_play_start|.
+    /// The data are assumed in native (hardware) format.
+    fn audio_play_write(&mut self, app_id: SDKAppId, data: &[u8]) -> Result<(), SDKError>;
+    /// Stop a play session started with |audio_play_start|.
+    fn audio_play_stop(&mut self, app_id: SDKAppId) -> Result<(), SDKError>;
 }
 
 /// Rust client-side request processing. Note there is no CAmkES stub to
@@ -343,7 +446,7 @@ pub trait SDKRuntimeInterface {
 //
 // TODO(sleffler): this attaches the call params to the IPC; might be
 //   better to keep the page(s) mapped in SDKRuntime to avoid map/unmap
-//   per-RPC but that requires a vspace allocator (or somerthing special
+//   per-RPC but that requires a vspace allocator (or something special
 //   purpose) and a redesign of the server side to use the endpoint badge
 //   to lookup the mapped page early. Downside to a fixed mapping is it
 //   limits how to handle requests w/ different-sized params (e.g. sensor
@@ -566,5 +669,97 @@ pub fn sdk_model_set_input(
             input_data_offset,
             input_data,
         },
+    )
+}
+
+#[inline]
+pub fn sdk_audio_reset(
+    rxrst: bool,
+    txrst: bool,
+    rxilvl: u8,
+    txilvl: u8,
+) -> Result<(), SDKRuntimeError> {
+    sdk_request::<AudioResetRequest, ()>(
+        SDKRuntimeRequest::AudioReset,
+        &AudioResetRequest {
+            rxrst,
+            txrst,
+            rxilvl,
+            txilvl,
+        },
+    )
+}
+
+#[inline]
+pub fn sdk_audio_record_start(
+    rate: usize,
+    buffer_size: usize,
+    stop_on_full: bool,
+) -> Result<(), SDKRuntimeError> {
+    sdk_request::<AudioRecordStartRequest, ()>(
+        SDKRuntimeRequest::AudioRecordStart,
+        &AudioRecordStartRequest {
+            rate,
+            buffer_size,
+            stop_on_full,
+        },
+    )
+}
+
+#[inline]
+pub fn sdk_audio_record_collect_non_blocking(data: &mut [u8]) -> Result<usize, SDKRuntimeError> {
+    let response = sdk_request::<AudioRecordCollectRequest, AudioRecordCollectResponse>(
+        SDKRuntimeRequest::AudioRecordCollect,
+        &AudioRecordCollectRequest {
+            max_data: data.len(),
+            wait_if_empty: false,
+        },
+    )?;
+    data[..response.data.len()].copy_from_slice(response.data);
+    Ok(response.data.len())
+}
+
+#[inline]
+pub fn sdk_audio_record_collect(data: &mut [u8]) -> Result<usize, SDKRuntimeError> {
+    let response = sdk_request::<AudioRecordCollectRequest, AudioRecordCollectResponse>(
+        SDKRuntimeRequest::AudioRecordCollect,
+        &AudioRecordCollectRequest {
+            max_data: data.len(),
+            wait_if_empty: true,
+        },
+    )?;
+    data[..response.data.len()].copy_from_slice(response.data);
+    Ok(response.data.len())
+}
+
+#[inline]
+pub fn sdk_audio_record_stop() -> Result<(), SDKRuntimeError> {
+    sdk_request::<AudioRecordStopRequest, ()>(
+        SDKRuntimeRequest::AudioRecordStop,
+        &AudioRecordStopRequest {},
+    )
+}
+
+#[inline]
+pub fn sdk_audio_play_start(rate: usize, buffer_size: usize) -> Result<(), SDKRuntimeError> {
+    sdk_request::<AudioPlayStartRequest, ()>(
+        SDKRuntimeRequest::AudioPlayStart,
+        &AudioPlayStartRequest { rate, buffer_size },
+    )
+}
+
+#[inline]
+pub fn sdk_audio_play_write(data: &[u8]) -> Result<(), SDKRuntimeError> {
+    sdk_request::<AudioPlayWriteRequest, ()>(
+        SDKRuntimeRequest::AudioPlayWrite,
+        &AudioPlayWriteRequest { data },
+    )
+}
+
+#[inline]
+pub fn sdk_audio_play_stop() -> Result<(), SDKRuntimeError> {
+    sdk_request::<AudioPlayStopRequest, ()>(
+        SDKRuntimeRequest::AudioPlayStop,
+        &AudioPlayStopRequest {},
     )
 }

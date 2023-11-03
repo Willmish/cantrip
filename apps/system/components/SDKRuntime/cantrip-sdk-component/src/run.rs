@@ -24,6 +24,8 @@ use static_assertions::assert_cfg;
 // NB: the RPC implementation uses MCS syscalls
 assert_cfg!(feature = "CONFIG_KERNEL_MCS");
 
+use cfg_if::cfg_if;
+
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec;
@@ -360,6 +362,27 @@ impl SdkRuntimeControlThread {
             SDKRuntimeRequest::SetModelInput => {
                 Self::model_set_input_request(app_id, request_slice, reply_slice)
             }
+            SDKRuntimeRequest::AudioReset => {
+                Self::audio_reset_request(app_id, request_slice, reply_slice)
+            }
+            SDKRuntimeRequest::AudioRecordStart => {
+                Self::audio_record_start_request(app_id, request_slice, reply_slice)
+            }
+            SDKRuntimeRequest::AudioRecordCollect => {
+                Self::audio_record_collect_request(app_id, request_slice, reply_slice)
+            }
+            SDKRuntimeRequest::AudioRecordStop => {
+                Self::audio_record_stop_request(app_id, request_slice, reply_slice)
+            }
+            SDKRuntimeRequest::AudioPlayStart => {
+                Self::audio_play_start_request(app_id, request_slice, reply_slice)
+            }
+            SDKRuntimeRequest::AudioPlayWrite => {
+                Self::audio_play_write_request(app_id, request_slice, reply_slice)
+            }
+            SDKRuntimeRequest::AudioPlayStop => {
+                Self::audio_play_stop_request(app_id, request_slice, reply_slice)
+            }
         }
     }
 
@@ -583,6 +606,89 @@ impl SdkRuntimeControlThread {
             request.input_data,
         )
     }
+
+    fn audio_reset_request(
+        app_id: SDKAppId,
+        request_slice: &[u8],
+        _reply_slice: &mut [u8],
+    ) -> Result<(), SDKError> {
+        let request = postcard::from_bytes::<sdk_interface::AudioResetRequest>(request_slice)
+            .map_err(deserialize_failure)?;
+        cantrip_sdk().audio_reset(
+            app_id,
+            request.rxrst,
+            request.txrst,
+            request.rxilvl,
+            request.txilvl,
+        )
+    }
+
+    fn audio_record_start_request(
+        app_id: SDKAppId,
+        request_slice: &[u8],
+        _reply_slice: &mut [u8],
+    ) -> Result<(), SDKError> {
+        let request = postcard::from_bytes::<sdk_interface::AudioRecordStartRequest>(request_slice)
+            .map_err(deserialize_failure)?;
+        cantrip_sdk().audio_record_start(
+            app_id,
+            request.rate,
+            request.buffer_size,
+            request.stop_on_full,
+        )
+    }
+
+    fn audio_record_collect_request(
+        app_id: SDKAppId,
+        request_slice: &[u8],
+        reply_slice: &mut [u8],
+    ) -> Result<(), SDKError> {
+        let request =
+            postcard::from_bytes::<sdk_interface::AudioRecordCollectRequest>(request_slice)
+                .map_err(deserialize_failure)?;
+        let mut sdk = cantrip_sdk();
+        let data = sdk.audio_record_collect(app_id, request.max_data, request.wait_if_empty)?;
+        let _ =
+            postcard::to_slice(&sdk_interface::AudioRecordCollectResponse { data }, reply_slice)
+                .map_err(serialize_failure)?;
+        Ok(())
+    }
+
+    fn audio_record_stop_request(
+        app_id: SDKAppId,
+        _request_slice: &[u8],
+        _reply_slice: &mut [u8],
+    ) -> Result<(), SDKError> {
+        cantrip_sdk().audio_record_stop(app_id)
+    }
+
+    fn audio_play_start_request(
+        app_id: SDKAppId,
+        request_slice: &[u8],
+        _reply_slice: &mut [u8],
+    ) -> Result<(), SDKError> {
+        let request = postcard::from_bytes::<sdk_interface::AudioPlayStartRequest>(request_slice)
+            .map_err(deserialize_failure)?;
+        cantrip_sdk().audio_play_start(app_id, request.rate, request.buffer_size)
+    }
+
+    fn audio_play_write_request(
+        app_id: SDKAppId,
+        request_slice: &[u8],
+        _reply_slice: &mut [u8],
+    ) -> Result<(), SDKError> {
+        let request = postcard::from_bytes::<sdk_interface::AudioPlayWriteRequest>(request_slice)
+            .map_err(deserialize_failure)?;
+        cantrip_sdk().audio_play_write(app_id, request.data)
+    }
+
+    fn audio_play_stop_request(
+        app_id: SDKAppId,
+        _request_slice: &[u8],
+        _reply_slice: &mut [u8],
+    ) -> Result<(), SDKError> {
+        cantrip_sdk().audio_play_stop(app_id)
+    }
 }
 
 type SDKManagerResult = Result<(usize, Option<seL4_CPtr>), SDKManagerError>;
@@ -633,17 +739,25 @@ impl SdkManagerInterfaceThread {
 }
 
 // Glue in i2s driver (for now).
-#[cfg(feature = "i2s-driver")]
-pub struct I2SInterfaceThread;
-#[cfg(feature = "i2s-driver")]
-impl CamkesThreadInterface for I2SInterfaceThread {
-    fn init() { i2s_driver::RxWatermarkInterfaceThread::init(); }
-    fn run() {
-        shared_irq_loop!(
-            i2s,
-            rx_watermark => i2s_driver::RxWatermarkInterfaceThread::handler,
-            tx_empty => i2s_driver::TxEmptyInterfaceThread::handler,
-            tx_watermark => i2s_driver::TxWatermarkInterfaceThread::handler
-        );
+cfg_if! {
+  if #[cfg(feature = "i2s-driver")] {
+    pub struct I2SRxWatermarkInterfaceThread;
+    impl CamkesThreadInterface for I2SRxWatermarkInterfaceThread {
+        fn run() {
+            dedicated_irq_loop!(
+                rx_watermark,
+                i2s_driver::RxWatermarkInterfaceThread::handler
+            );
+        }
     }
+    pub struct I2STxWatermarkInterfaceThread;
+    impl CamkesThreadInterface for I2STxWatermarkInterfaceThread {
+        fn run() {
+            dedicated_irq_loop!(
+                tx_watermark,
+                i2s_driver::TxWatermarkInterfaceThread::handler
+            );
+        }
+    }
+  }
 }

@@ -25,6 +25,23 @@ import <SecurityCoordinator/SecurityCoordinator.camkes>;
 import <TimerService/TimerService.camkes>;
 import <SDKRuntime/SDKRuntime.camkes>;
 
+component I2SHardware {
+    hardware;
+    dataport Buf csr;
+    emits Interrupt tx_watermark;
+    emits Interrupt rx_watermark;
+    emits Interrupt tx_empty;
+    emits Interrupt rx_overflow;
+}
+
+component MailboxHardware {
+    hardware;
+    dataport Buf mmio;
+    emits Interrupt wtirq;
+    emits Interrupt rtirq;
+    emits Interrupt eirq;
+}
+
 component OpenTitanUART {
     hardware;
     dataport Buf mmio_region;
@@ -57,19 +74,12 @@ component BuiltinCpioArchive {
     dataport Buf(CPIO_SIZE_BYTES) cpio;
 }
 
-component MailboxHardware {
-    hardware;
-    dataport Buf mmio;
-    emits Interrupt wtirq;
-    emits Interrupt rtirq;
-    emits Interrupt eirq;
-}
-
 assembly {
     composition {
         component BuiltinCpioArchive cpio;
 
         // Device hardware & drivers
+        component I2SHardware i2s;
         component MailboxHardware mailbox_hardware;
         component OpenTitanTimer timer;
         component OpenTitanUART uart;
@@ -88,6 +98,18 @@ assembly {
         // Built-in CPIO archive is visible only to the SecurityCoordinator.
         connection cantripMMIO cpio_archive(
             from security_coordinator.cpio_archive, to cpio.cpio);
+
+        // I2SDriver (part of SDKRuntime)
+        // NB: temp hookup pre SensorManager
+        connection cantripMMIO i2s_csr(
+            from sdk_runtime.i2s_csr,
+            to i2s.csr);
+        connection cantripIRQ i2s_rx_watermark(
+            from i2s.rx_watermark,
+            to sdk_runtime.i2s_rx_watermark);
+        connection cantripIRQ i2s_tx_watermark(
+            from i2s.tx_watermark,
+            to sdk_runtime.i2s_tx_watermark);
 
         // MailboxDriver (part of SecurityCoordinator)
         connection cantripMMIO mailbox_driver_mmio(
@@ -210,6 +232,13 @@ assembly {
         //    address space so does it matter where we place this?
         cpio.cpio_paddr = CPIO_BASE_ADDR;
         cpio.cpio_size = CPIO_SIZE_BYTES;
+
+        i2s.csr_paddr = TOP_MATCHA_I2S0_BASE_ADDR;
+        i2s.csr_size = TOP_MATCHA_I2S0_SIZE_BYTES;
+        i2s.tx_watermark_irq_number = TOP_MATCHA_PLIC_IRQ_ID_I2S0_TX_WATERMARK;
+        i2s.rx_watermark_irq_number = TOP_MATCHA_PLIC_IRQ_ID_I2S0_RX_WATERMARK;
+        i2s.tx_empty_irq_number = TOP_MATCHA_PLIC_IRQ_ID_I2S0_TX_EMPTY;
+        i2s.rx_overflow_irq_number = TOP_MATCHA_PLIC_IRQ_ID_I2S0_RX_OVERFLOW;
 
         mailbox_hardware.mmio_paddr = TOP_MATCHA_TLUL_MAILBOX_SMC_BASE_ADDR;
         mailbox_hardware.mmio_size = TOP_MATCHA_TLUL_MAILBOX_SMC_SIZE_BYTES;

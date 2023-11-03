@@ -153,8 +153,8 @@ pub fn get_rdata() -> u32 { unsafe { get_i2s(I2S_RDATA_REG_OFFSET).read_volatile
 // NB: read-only
 
 // I2S write data.
-pub fn get_wdata() -> u32 { unsafe { get_i2s(I2S_WDATA_REG_OFFSET).read_volatile() } }
-// NB: write-only and not a good idea as it affects other csr's
+pub fn set_wdata(data: u32) { unsafe { get_i2s_mut(I2S_WDATA_REG_OFFSET).write_volatile(data) } }
+// NB: write-only
 
 #[repr(u32)]
 #[derive(BitfieldSpecifier)]

@@ -24,9 +24,11 @@ sel4-config = { path = "../../cantrip-os-common/src/sel4-config" }
 [features]
 CONFIG_KERNEL_MCS = []
 CONFIG_PLAT_BCM2837 = []
-CONFIG_PLAT_SHODAN = []
+CONFIG_PLAT_SHODAN = [
+    "i2s-driver/CONFIG_PLAT_SHODAN",
+]
 CONFIG_PLAT_NEXUS = [
-    "i2s-driver",
+    "i2s-driver/CONFIG_PLAT_NEXUS",
 ]
 CONFIG_DEBUG_BUILD = []
 

@@ -37,6 +37,8 @@ pub enum SDKError {
     OutOfResources,
     NoModelOutput,
     InvalidInputRange,
+    InvalidAudioParameter,
+    InvalidAudioState,
 }
 
 impl From<postcard::Error> for SDKError {
@@ -68,6 +70,8 @@ pub enum SDKRuntimeError {
     SDKOutOfResources,
     SDKNoModelOutput,
     SDKInvalidInputRange,
+    SDKInvalidAudioParameter,
+    SDKInvalidAudioState,
 }
 
 /// Mapping function from Rust -> C.
@@ -93,6 +97,8 @@ impl From<SDKError> for SDKRuntimeError {
             SDKError::OutOfResources => SDKRuntimeError::SDKOutOfResources,
             SDKError::NoModelOutput => SDKRuntimeError::SDKNoModelOutput,
             SDKError::InvalidInputRange => SDKRuntimeError::SDKInvalidInputRange,
+            SDKError::InvalidAudioParameter => SDKRuntimeError::SDKInvalidAudioParameter,
+            SDKError::InvalidAudioState => SDKRuntimeError::SDKInvalidAudioState,
         }
     }
 }
@@ -128,6 +134,8 @@ impl From<SDKRuntimeError> for Result<(), SDKError> {
             SDKRuntimeError::SDKOutOfResources => Err(SDKError::OutOfResources),
             SDKRuntimeError::SDKNoModelOutput => Err(SDKError::NoModelOutput),
             SDKRuntimeError::SDKInvalidInputRange => Err(SDKError::InvalidInputRange),
+            SDKRuntimeError::SDKInvalidAudioParameter => Err(SDKError::InvalidAudioParameter),
+            SDKRuntimeError::SDKInvalidAudioState => Err(SDKError::InvalidAudioState),
         }
     }
 }

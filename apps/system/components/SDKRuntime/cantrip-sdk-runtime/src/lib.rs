@@ -184,4 +184,65 @@ impl SDKRuntimeInterface for Guard<'_> {
             .unwrap()
             .model_set_input(app_id, id, input_data_offset, input_data)
     }
+
+    fn audio_reset(
+        &mut self,
+        app_id: SDKAppId,
+        rxrst: bool,
+        txrst: bool,
+        rxilvl: u8,
+        txilvl: u8,
+    ) -> Result<(), SDKError> {
+        self.runtime
+            .as_mut()
+            .unwrap()
+            .audio_reset(app_id, rxrst, txrst, rxilvl, txilvl)
+    }
+    fn audio_record_start(
+        &mut self,
+        app_id: SDKAppId,
+        rate: usize,
+        buffer_size: usize,
+        stop_on_full: bool,
+    ) -> Result<(), SDKError> {
+        self.runtime
+            .as_mut()
+            .unwrap()
+            .audio_record_start(app_id, rate, buffer_size, stop_on_full)
+    }
+    fn audio_record_collect(
+        &mut self,
+        app_id: SDKAppId,
+        max_data: usize,
+        wait_if_empty: bool,
+    ) -> Result<&[u8], SDKError> {
+        self.runtime
+            .as_mut()
+            .unwrap()
+            .audio_record_collect(app_id, max_data, wait_if_empty)
+    }
+    fn audio_record_stop(&mut self, app_id: SDKAppId) -> Result<(), SDKError> {
+        self.runtime.as_mut().unwrap().audio_record_stop(app_id)
+    }
+
+    fn audio_play_start(
+        &mut self,
+        app_id: SDKAppId,
+        rate: usize,
+        buffer_size: usize,
+    ) -> Result<(), SDKError> {
+        self.runtime
+            .as_mut()
+            .unwrap()
+            .audio_play_start(app_id, rate, buffer_size)
+    }
+    fn audio_play_write(&mut self, app_id: SDKAppId, data: &[u8]) -> Result<(), SDKError> {
+        self.runtime
+            .as_mut()
+            .unwrap()
+            .audio_play_write(app_id, data)
+    }
+    fn audio_play_stop(&mut self, app_id: SDKAppId) -> Result<(), SDKError> {
+        self.runtime.as_mut().unwrap().audio_play_stop(app_id)
+    }
 }

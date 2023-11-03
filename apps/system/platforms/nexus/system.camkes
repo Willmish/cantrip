@@ -93,11 +93,12 @@ assembly {
         connection cantripMMIO i2s_csr(
             from sdk_runtime.i2s_csr,
             to i2s.csr);
-        connection cantripIRQ i2s_irq(
+        connection cantripIRQ i2s_rx_watermark(
             from i2s.rx_watermark,
+            to sdk_runtime.i2s_rx_watermark);
+        connection cantripIRQ i2s_tx_watermark(
             from i2s.tx_watermark,
-            from i2s.tx_empty,
-            to sdk_runtime.i2s);
+            to sdk_runtime.i2s_tx_watermark);
 
         // MailboxDriver (part of SecurityCoordinator)
         connection cantripMMIO mailbox_driver_mmio(
