@@ -14,6 +14,9 @@
 
 // Shodan platform definitions not exported in top_matcha.
 
+// I2S primary clock frequency.
+pub const TOP_MATCHA_SMC_I2S_CLOCK_FREQ_PERIPHERAL_HZ: u64 = 48_000_000;
+
 // UART primary clock frequency.
 pub const TOP_MATCHA_SMC_UART_CLOCK_FREQ_PERIPHERAL_HZ: u64 = 48_000_000;
 
