@@ -52,8 +52,6 @@ use MlCore::MAX_MODELS;
 #[derive(Debug)]
 struct LoadableModel {
     id: ImageId,
-    on_flash_sizes: ImageSizes,
-    in_memory_sizes: ImageSizes,
     rate_in_ms: Option<u32>,
     client_id: seL4_Word,
     jobnum: usize,
@@ -61,17 +59,9 @@ struct LoadableModel {
     output_data: [u8; MAX_OUTPUT_DATA],  // Data returned from last run.
 }
 impl LoadableModel {
-    pub fn new(
-        id: ImageId,
-        on_flash_sizes: ImageSizes,
-        in_memory_sizes: ImageSizes,
-        rate_in_ms: Option<u32>,
-        client_id: seL4_Word,
-    ) -> Self {
+    pub fn new(id: ImageId, rate_in_ms: Option<u32>, client_id: seL4_Word) -> Self {
         Self {
             id,
-            on_flash_sizes,
-            in_memory_sizes,
             rate_in_ms,
             client_id,
             jobnum: 0,
@@ -137,28 +127,6 @@ impl MLCoordinator {
         self.image_manager.init();
     }
 
-    // Validates the image by ensuring it has all the required loadable
-    // sections and that it fits into the TCM. Returns a tuple of
-    // |(on_flash_sizes, in_memory_sizes)|.
-    fn validate_image(&self, id: &ImageId) -> Option<(ImageSizes, ImageSizes)> {
-        let mut container_slot = CSpaceSlot::new();
-        match cantrip_security_load_model(&id.bundle_id, &id.model_id, &container_slot) {
-            Ok(model_frames) => {
-                container_slot.release(); // NB: take ownership
-                let mut image = BundleImage::new(&model_frames);
-                let result = MlCore::preprocess_image(id, &mut image);
-                drop(image); // NB: before releasing objects
-                let _ = cantrip_object_free_in_cnode(&model_frames);
-
-                result
-            }
-            Err(status) => {
-                error!("{}: Security Core error {:?}", &id, status);
-                None
-            }
-        }
-    }
-
     // If there is a next model in the queue, load it onto the vector core and
     // start running. If there's already a running model, don't do anything.
     fn schedule_next_model(&mut self) -> Result<(), MlCoordError> {
@@ -186,29 +154,29 @@ impl MLCoordinator {
                     container_slot.release(); // NB: take ownership
                     let mut image = BundleImage::new(&model_frames);
 
+                    let (on_flash_sizes, in_memory_sizes) =
+                        MlCore::preprocess_image(&model.id, &mut image)
+                            .ok_or(MlCoordError::InvalidImage)?;
+                    image.reset(); // NB: reset section iterator
+
                     // Ask the image manager to make enough room and get
                     // the starting address for writing the image.
                     let temp_top = self.image_manager.make_space(
-                        model.in_memory_sizes.data_top_size(),
-                        model.in_memory_sizes.temporary_data,
+                        in_memory_sizes.data_top_size(),
+                        in_memory_sizes.temporary_data,
                     );
-                    MlCore::write_image(
-                        &mut image,
-                        temp_top,
-                        &model.on_flash_sizes,
-                        &model.in_memory_sizes,
-                    )?;
-                    info!("Load successful.");
+                    MlCore::write_image(&mut image, temp_top, &on_flash_sizes, &in_memory_sizes)?;
+                    info!("Load {} successful.", &model.id);
 
                     drop(image); // NB: before releasing objects
                     let _ = cantrip_object_free_in_cnode(&model_frames);
 
                     // Inform the image manager the image has been written.
                     self.image_manager
-                        .commit_image(model.id.clone(), model.in_memory_sizes);
+                        .commit_image(model.id.clone(), in_memory_sizes);
                 }
                 Err(e) => {
-                    error!("{}: LoadModel failed: {:?}", &model.id, e);
+                    error!("LoadModel {} failed: {:?}", &model.id, e);
                     self.statistics.load_failures += 1;
                     return Err(MlCoordError::LoadModelFailed);
                 }
@@ -312,16 +280,10 @@ impl MLCoordinator {
             .position(|m| m.is_none())
             .ok_or(MlCoordError::NoModelSlotsLeft)?;
 
-        let (on_flash_sizes, in_memory_sizes) =
-            self.validate_image(&id).ok_or(MlCoordError::InvalidImage)?;
+        // NB: use size_buffer to check the model exists.
+        let _ = cantrip_security_size_buffer(&id.model_id).or(Err(MlCoordError::InvalidImage))?;
 
-        self.models[index] = Some(LoadableModel::new(
-            id,
-            on_flash_sizes,
-            in_memory_sizes,
-            rate_in_ms,
-            client_id,
-        ));
+        self.models[index] = Some(LoadableModel::new(id, rate_in_ms, client_id));
 
         Ok(index)
     }
