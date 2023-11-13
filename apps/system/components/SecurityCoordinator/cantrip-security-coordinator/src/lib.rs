@@ -334,12 +334,15 @@ impl SecurityCoordinatorInterface for CantripSecurityCoordinator {
         Ok(result)
     }
 
-    // TODO(sleffler): use get_bundle so package must be loaded? instantiating
-    //   hashmap entries may be undesirable
     fn size_buffer(&self, bundle_id: &str) -> Result<usize, SecurityRequestError> {
-        let bundle = self.get_bundle(bundle_id)?;
+        // NB: do not require the bundle be loaded so this api can be
+        //   used to probe whether a bundle is known/present
+        let bundle = self.get_bundle_from_builtins(bundle_id)?;
         Ok(bundle.pkg_size) // TODO(sleffler): do better
     }
+
+    // TODO(sleffler): use get_bundle so package must be loaded? instantiating
+    //   hashmap entries may be undesirable
     fn get_manifest(&self, bundle_id: &str) -> Result<String, SecurityRequestError> {
         let _bundle = self.get_bundle(bundle_id)?;
         Err(SecurityRequestError::GetManifestFailed)
