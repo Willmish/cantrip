@@ -154,6 +154,10 @@ impl<'a> BundleImage<'a> {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.finish();
+        self.next_section = 0;
+    }
     pub fn finish(&mut self) { self.unmap_current_frame().expect("finish"); }
 
     // Read the current section header and setup to advance to the next
