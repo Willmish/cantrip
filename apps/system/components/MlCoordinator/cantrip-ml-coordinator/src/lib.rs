@@ -76,6 +76,7 @@ impl LoadableModel {
 struct Statistics {
     load_failures: u32,
     already_queued: u32,
+    already_running: u32,
 }
 
 pub struct MLCoordinator {
@@ -116,6 +117,7 @@ impl MLCoordinator {
             statistics: Statistics {
                 load_failures: 0,
                 already_queued: 0,
+                already_running: 0,
             },
         }
     }
@@ -209,15 +211,17 @@ impl MLCoordinator {
     pub fn handle_return_interrupt(&mut self) {
         trace!("Vector Core finish.");
         self.process_return_interrupt();
-        self.running_model = None;
-        if let Err(e) = self.schedule_next_model() {
-            error!("Running next model failed with {:?}", e)
-        }
+
         // Put the core in reset.
         // On Kelvin, this will have the effect of clearing the interrupt.
         MlCore::reset();
         // Clear/ack interrupt.
         MlCore::clear_finish();
+
+        self.running_model = None;
+        if let Err(e) = self.schedule_next_model() {
+            error!("Running next model failed with {:?}", e)
+        }
     }
 
     fn process_return_interrupt(&mut self) -> Option<()> {
@@ -383,25 +387,30 @@ impl MLCoordinator {
 
     /// Enqueues the model associated with the completed timer.
     pub fn timer_completed(&mut self, model_idx: ModelIdx) -> Result<(), MlCoordError> {
-        // There's a small chance the model was removed at the same time the
-        // timer interrupt fires, in which case we just ignore it.
-        if self.models[model_idx].is_some() {
-            // We don't want the queue to grow unbounded, so don't requeue
-            // an execution if there's one scheduled already.
-            if self.execution_queue.iter().any(|idx| *idx == model_idx) {
-                let model = self.models[model_idx].as_ref().unwrap();
-                warn!(
-                    "Dropping {}:{} duplicate periodic execution.",
-                    &model.id.bundle_id, &model.id.model_id
-                );
-                self.statistics.already_queued += 1;
-                return Ok(());
+        let is_running_model = |model: &LoadableModel| -> bool {
+            if let Some(running_model) = self.running_model.as_ref() {
+                model.id == *running_model
+            } else {
+                false
             }
-
-            self.execution_queue.push(model_idx);
-            self.schedule_next_model()?;
+        };
+        if let Some(model) = &self.models[model_idx] {
+            // Model is still loaded; schedule it for execution.
+            if is_running_model(model) {
+                warn!("Model {} is running slower than periodic timer.", &model.id);
+                self.statistics.already_running += 1;
+            }
+            if self.execution_queue.iter().any(|idx| *idx == model_idx) {
+                // The model is already scheduled to run again, do not re-add it.
+                if !is_running_model(model) {
+                    warn!("Timer expired for {} while waiting to be scheduled.", &model.id);
+                    self.statistics.already_queued += 1;
+                }
+            } else {
+                self.execution_queue.push(model_idx);
+                self.schedule_next_model()?;
+            }
         }
-
         Ok(())
     }
 
