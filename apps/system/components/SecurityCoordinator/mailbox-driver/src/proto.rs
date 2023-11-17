@@ -38,6 +38,9 @@ pub enum SECRequest<'a> {
     FindFile(&'a str),     // Find file by name -> (/*fid*/ u32, /*size*/ u32)
     GetFilePage(u32, u32), // Get page of file data -> <attached page>
 
+    InputSelect(/*peripheral=*/ u32, /*pad=*/ u32), // Connect the input of |pad| to |peripheral|
+    OutputSelect(/*pad=*/ u32, /*peripheral=*/ u32), // Connect the output of |peripheral| to |pad|
+
     Test(/*count*/ u32), // Scribble on count words of supplied page
 
     #[cfg(feature = "alloc")]
@@ -155,6 +158,16 @@ pub fn mbox_find_file(name: &str) -> Result<(u32, u32), SECRequestError> {
 
 pub fn mbox_get_file_page(fid: u32, offset: u32, frame: seL4_CPtr) -> Result<(), SECRequestError> {
     sec_request(&SECRequest::GetFilePage(fid, offset), Some(frame))?;
+    Ok(())
+}
+
+pub fn mbox_input_select(peripheral: u32, pad: u32) -> Result<(), SECRequestError> {
+    sec_request(&SECRequest::InputSelect(peripheral, pad), None)?;
+    Ok(())
+}
+
+pub fn mbox_output_select(pad: u32, peripheral: u32) -> Result<(), SECRequestError> {
+    sec_request(&SECRequest::OutputSelect(pad, peripheral), None)?;
     Ok(())
 }
 
