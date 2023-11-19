@@ -20,10 +20,10 @@ pub type seL4_Page = seL4_X86_Page;
 pub type seL4_PageTable = seL4_X86_PageTable;
 pub type seL4_VMAttributes = seL4_X86_VMAttributes;
 
+pub use seL4_ObjectType::seL4_X86_4K as seL4_SmallPageObject;
 pub use seL4_ObjectType::seL4_X86_LargePageObject as seL4_LargePageObject;
 pub use seL4_ObjectType::seL4_X86_PageDirectoryObject as seL4_PageDirectoryObject;
 pub use seL4_ObjectType::seL4_X86_PageTableObject as seL4_PageTableObject;
-pub use seL4_ObjectType::seL4_X86_SmallPageObject as seL4_SmallPageObject;
 
 pub use seL4_X86_Default_VMAttributes as seL4_Default_VMAttributes;
 

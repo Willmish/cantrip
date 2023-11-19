@@ -100,7 +100,7 @@ pub enum seL4_X86_VMAttributes {
     WriteCombining = 4,
 }
 impl From<u32> for seL4_X86_VMAttributes {
-    fn from(val: u32) -> seL4_x86_VMAttributes { unsafe { ::core::mem::transmute(val & 7) } }
+    fn from(val: u32) -> seL4_X86_VMAttributes { unsafe { ::core::mem::transmute(val & 7) } }
 }
 pub const seL4_X86_Default_VMAttributes: seL4_X86_VMAttributes = seL4_X86_VMAttributes::WriteBack;
 
