@@ -45,7 +45,9 @@ impl RtirqInterfaceThread {
     pub fn handler() {
         trace!("handle rtirq");
         set_intr_state(IntrState::new().with_rtirq(true));
-        unsafe { &RX_SEMAPHORE.post() }; // Unblock anyone waiting.
+        unsafe {
+            RX_SEMAPHORE.post();
+        } // Unblock anyone waiting.
     }
 }
 

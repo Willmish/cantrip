@@ -18,8 +18,14 @@ fn main() {
     // If SEL4_OUT_DIR is not set we expect the kernel build at a fixed
     // location relative to the ROOTDIR env variable.
     println!("SEL4_OUT_DIR {:?}", env::var("SEL4_OUT_DIR"));
-    let sel4_out_dir = env::var("SEL4_OUT_DIR")
-        .unwrap_or_else(|_| format!("{}/out/cantrip/kernel", env::var("ROOTDIR").unwrap()));
+    println!("PLATFORM {:?}", env::var("PLATFORM"));
+    let sel4_out_dir = env::var("SEL4_OUT_DIR").unwrap_or_else(|_| {
+        format!(
+            "{}/out/cantrip/{}/release/kernel",
+            env::var("ROOTDIR").unwrap(),
+            env::var("PLATFORM").unwrap(),
+        )
+    });
     println!("sel4_out_dir {}", sel4_out_dir);
 
     // Dredge seL4 kernel config for settings we need as features to generate
