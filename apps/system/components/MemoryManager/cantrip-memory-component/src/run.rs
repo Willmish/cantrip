@@ -81,6 +81,9 @@ impl CamkesThreadInterface for MemoryManagerControlThread {
         }
 
         let bootinfo = get_bootinfo();
+        let empty = unsafe { ptr::addr_of!(bootinfo.empty).read_volatile() };
+        // NB: must happen before cantrip_memory() for untyped slab splitting
+        CAMKES.init_slot_allocator(empty.start, empty.end);
         if let Ok(stats) = cantrip_memory().stats() {
             info!(
                 "Global memory: {} allocated {} free, reserved: {} kernel {} user",
@@ -90,8 +93,6 @@ impl CamkesThreadInterface for MemoryManagerControlThread {
                 stats.overhead_bytes,
             );
         }
-
-        CAMKES.init_slot_allocator(bootinfo.empty.start, bootinfo.empty.end);
 
         // Delete the CNode setup by CAmkES; we're going to reuse the well-known
         // slot once it is empty (see MemoryManagerInterfaceThread::run below).
