@@ -23,6 +23,7 @@ use bitvec::prelude::*;
 use core::ops::Range;
 #[cfg(feature = "TRACE_OPS")]
 use log::trace;
+use log::{error, warn};
 use spin::Mutex;
 
 struct Slots {
@@ -47,6 +48,7 @@ impl Slots {
         }
     }
     fn init(&mut self, name: &'static str, size: usize) {
+        assert!(size > 0, "No slots for {name}");
         self.bits = Some(bitvec![u8, Lsb0; 0; size].into_boxed_bitslice());
         self.name = name;
     }
@@ -81,9 +83,11 @@ impl Slots {
     }
     fn alloc_first_fit(&mut self, count: usize) -> Option<usize> {
         if count == 0 {
+            warn!("allocate zero slots");
             return None;
         }
         if count > self.free_slots() {
+            error!("out of slots: {count} > {}", self.free_slots());
             return None;
         }
         if count == 1 {
