@@ -23,6 +23,7 @@ use cantrip_memory_interface::ObjDesc;
 use cantrip_memory_interface::ObjDescBundle;
 use cantrip_os_common::camkes::{seL4_CPath, Camkes};
 use cantrip_os_common::sel4_sys;
+use cantrip_os_common::slot_allocator;
 use core::ops::Range;
 use log::{debug, error, info, trace, warn};
 use smallvec::SmallVec;
@@ -33,9 +34,16 @@ use sel4_sys::seL4_CPtr;
 use sel4_sys::seL4_Error;
 use sel4_sys::seL4_Result;
 use sel4_sys::seL4_UntypedDesc;
+use sel4_sys::seL4_UntypedObject;
 use sel4_sys::seL4_Untyped_Describe;
 use sel4_sys::seL4_Untyped_Retype;
 use sel4_sys::seL4_Word;
+
+use slot_allocator::CANTRIP_CSPACE_SLOTS;
+
+extern "Rust" {
+    static SELF_CNODE: seL4_CPtr;
+}
 
 fn delete_path(path: &seL4_CPath) -> seL4_Result {
     unsafe { seL4_CNode_Delete(path.0, path.1, path.2 as u8) }
@@ -139,12 +147,13 @@ impl MemoryManager {
             out_of_memory: 0,
         };
         for (ut_index, ut) in untypeds.iter().enumerate() {
+            let ut_cptr = slots.start + ut_index;
             #[cfg(feature = "CONFIG_NOISY_UNTYPEDS")]
-            log::info!("slot {} {:?}", slots.start + ut_index, ut);
+            log::info!("slot {} {:?}", ut_cptr, ut);
             let slab_size = l2tob(ut.size_bits());
             if ut.is_device() {
                 m._device_untypeds
-                    .push(UntypedSlab::new(ut, slab_size, slots.start + ut_index));
+                    .push(UntypedSlab::new(ut, slab_size, ut_cptr));
             } else {
                 if ut.is_tainted() {
                     // Slabs marked "tainted" were used by the rootserver
@@ -155,31 +164,63 @@ impl MemoryManager {
                 // NB: must get the current state of the slab as the value
                 //   supplied by the rootserver (in |untypeds|) will reflect
                 //   resources available before the above revoke.
-                let info = untyped_describe(slots.start + ut_index);
+                let info = untyped_describe(ut_cptr);
                 assert_eq!(info.sizeBits, ut.size_bits());
 
                 // We only have the remainder available for allocations.
                 // Beware that slabs with existing allocations (for the
                 // services constructed by the rootserver) are not generally
-                // useful because we cannot recycle memory once retype'd.
-                // We use those to satisfy "static object" alloc's (e.g.
-                // as done by SDKRuntime); think of these requests as an
-                // extension of the work done by the rootserver.
-                // TODO(sleffler): split to minimize wasted space
+                // useful because we cannot recycle memory once retype'd;
+                // those we carefully split to reclaim avaiilable space.
                 if info.remainingBytes > 0 {
-                    let slab = UntypedSlab::new(ut, info.remainingBytes, slots.start + ut_index);
                     if info.remainingBytes == slab_size {
-                        m.untypeds.push(slab);
+                        m.untypeds
+                            .push(UntypedSlab::new(ut, info.remainingBytes, ut_cptr));
                     } else {
-                        m.static_untypeds.push(slab);
+                        // Split the unallocated space into smaller slabs that
+                        // are entirely unused. This is a bit tricky as the
+                        // kernel allocator does implicit alignment to the slab
+                        // size. We compensate for this by logically splitting
+                        // the slab in 1/2 and then searching for the best slab
+                        // in the smaller region. The goal here is to reclaim
+                        // as much space as possible using the minimum number
+                        // of slabs (to reduce overhead searching slabs when
+                        // doing allocations).
+                        // TODO(sleffler): move this to the rootserver
+                        let size_bits = info.sizeBits - 1; // 1/2 the slab size
+                                                           // Allocate alignment slabs.
+                        while let Some(align_bits) = Self::find_best_slab(ut_cptr, size_bits) {
+                            match Self::new_untyped(ut_cptr, align_bits) {
+                                Ok(free_untyped) => {
+                                    m.untypeds.push(UntypedSlab::new(
+                                        ut, /*XXX*/
+                                        l2tob(align_bits),
+                                        free_untyped,
+                                    ));
+                                }
+                                Err(e) => {
+                                    error!("Retype align {align_bits}: {e:?}")
+                                }
+                            }
+                        }
+                        // And finally allocate the 1/2-size slab.
+                        match Self::new_untyped(ut_cptr, size_bits) {
+                            Ok(free_untyped) => {
+                                m.untypeds.push(UntypedSlab::new(
+                                    ut, /*XXX*/
+                                    l2tob(size_bits),
+                                    free_untyped,
+                                ));
+                            }
+                            Err(e) => {
+                                error!("Retype size {size_bits}: {e:?}")
+                            }
+                        }
                     }
+                    // XXX assumes all space in the slab is reclaimed
                     m.total_bytes += info.remainingBytes;
                 } else {
-                    trace!(
-                        "Discard slot {}, size {}, no usable space",
-                        slots.start + ut_index,
-                        ut.size_bits()
-                    );
+                    trace!("Discard slot {ut_cptr}, size {}, no usable space", ut.size_bits());
                 }
 
                 // Use overhead to track memory allocated out of our control.
@@ -192,10 +233,8 @@ impl MemoryManager {
         m.static_untypeds
             .sort_unstable_by(|a, b| b.free_bytes.cmp(&a.free_bytes));
         if m.static_untypeds.is_empty() {
-            // No untyped memory available for static object requests;
-            // seed the pool with the smallest "normal" slab.
-            // TODO(sleffler): maybe split slab if "too big" (better to
-            //   dynamically grow static_untypeds on demand?)
+            // Seed the pool for static object requests with the smallest
+            // "normal" slab.
             m.static_untypeds.push(m.untypeds.pop().unwrap());
         }
         m
@@ -220,6 +259,42 @@ impl MemoryManager {
     pub fn untyped_slab_too_small(&self) -> usize { self.untyped_slab_too_small }
     pub fn out_of_memory(&self) -> usize { self.out_of_memory }
 
+    // Finds the largest slab with minimum mis-alignment (if any).
+    fn find_best_slab(ut_cptr: seL4_CPtr, size_bits: usize) -> Option<usize> {
+        // Align |base_value| according to |alignment|. This mimics the
+        // alignUp logic the kernel uses for an Untyped_Retype operation.
+        fn align_up(base_value: seL4_Word, alignment: seL4_Word) -> seL4_Word {
+            fn bit(x: seL4_Word) -> seL4_Word { 1 << x }
+            fn mask(x: seL4_Word) -> seL4_Word { bit(x) - 1 }
+            (base_value + (bit(alignment) - 1)) & !mask(alignment)
+        }
+        // NB: must use the current state to track each slab split
+        let info = untyped_describe(ut_cptr);
+        let alignment = info.remainingBytes - l2tob(size_bits);
+        let mut min_mis_alignment = alignment;
+        let mut best_bits = None;
+        // XXX could go down to 4 (seL4_MinUntypedBits).
+        for bits in (8..size_bits).rev() {
+            let slab_size = l2tob(bits);
+            if slab_size <= alignment {
+                let free_index = l2tob(info.sizeBits) - info.remainingBytes;
+                let aligned_free_index = align_up(free_index, bits);
+                let mis_alignment = aligned_free_index - free_index;
+                if mis_alignment == 0 {
+                    return Some(bits); // optimal
+                }
+                if mis_alignment < min_mis_alignment {
+                    min_mis_alignment = mis_alignment;
+                    best_bits = Some(bits);
+                }
+            }
+        }
+        if min_mis_alignment != 0 {
+            warn!("Lost {min_mis_alignment} bytes due to alignment.");
+        }
+        best_bits
+    }
+
     fn retype_untyped(free_untyped: seL4_CPtr, root: seL4_CPtr, obj: &ObjDesc) -> seL4_Result {
         unsafe {
             seL4_Untyped_Retype(
@@ -232,6 +307,25 @@ impl MemoryManager {
                 /*node_offset=*/ obj.cptr,
                 /*num_objects=*/ obj.retype_count(),
             )
+        }
+    }
+
+    fn new_untyped(src_untyped: seL4_CPtr, size_bits: usize) -> Result<seL4_CPtr, seL4_Error> {
+        unsafe {
+            let free_untyped = CANTRIP_CSPACE_SLOTS
+                .alloc(1)
+                .ok_or(seL4_Error::seL4_NotEnoughMemory)?;
+            seL4_Untyped_Retype(
+                src_untyped,
+                /*type=*/ seL4_UntypedObject.into(),
+                /*size_bytes=*/ size_bits,
+                /*root=*/ SELF_CNODE,
+                /*node_index=*/ 0, // NB: ignored 'cuz depth is zero
+                /*node_depth=*/ 0, // NB: store in cnode
+                /*node_offset*/ free_untyped,
+                /*num_objects=*/ 1,
+            )
+            .map(|_| free_untyped)
         }
     }
 
