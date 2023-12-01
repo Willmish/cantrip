@@ -21,8 +21,10 @@ pub mod error;
 pub use error::SDKError;
 pub use error::SDKRuntimeError;
 
+extern crate alloc;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::{Deserialize, Serialize};
+use zerovec::ZeroVec;
 
 use sel4_sys::seL4_CPtr;
 use sel4_sys::seL4_Call;
@@ -239,12 +241,13 @@ pub struct AudioRecordStartRequest {
 /// SDKRuntimeRequest::AudioRecordCollect
 #[derive(Serialize, Deserialize)]
 pub struct AudioRecordCollectRequest {
-    pub max_data: usize,
+    pub max_samples: usize,
     pub wait_if_empty: bool, // XXX wait for fifo to reach level?
 }
 #[derive(Serialize, Deserialize)]
 pub struct AudioRecordCollectResponse<'a> {
-    pub data: &'a [u8],
+    #[serde(borrow)]
+    pub data: ZeroVec<'a, u32>,
 }
 
 /// SDKRuntimeRequest::AudioRecordStop
@@ -261,7 +264,8 @@ pub struct AudioPlayStartRequest {
 /// SDKRuntimeRequest::AudioPlayWrite
 #[derive(Serialize, Deserialize)]
 pub struct AudioPlayWriteRequest<'a> {
-    pub data: &'a [u8],
+    #[serde(borrow)]
+    pub data: ZeroVec<'a, u32>,
 }
 
 /// SDKRuntimeRequest::AudioPlayStop
@@ -301,10 +305,10 @@ pub enum SDKRuntimeRequest {
 
     AudioReset, // Reset audio state: [rxrst: bool, txrst: bool, rxilvl: u8, txilvl: u8]
     AudioRecordStart, // Start recording: [rate: usize, buffer_size: usize, stop_on_full: bool]
-    AudioRecordCollect, // Collect recorded data: [max_data: usize, wait_if_empty: bool]
+    AudioRecordCollect, // Collect recorded data: [max_samples: usize, wait_if_empty: bool]
     AudioRecordStop, // Stop recording (any un-collected data are discarded): []
     AudioPlayStart, // Start playing: [rate: usize, buffer_size: usize]
-    AudioPlayWrite, // Write play samples: [data: &[u8]]
+    AudioPlayWrite, // Write play samples: [data: &[u32]]
     AudioPlayStop, // Stop playing: []
 }
 
@@ -413,9 +417,9 @@ pub trait SDKRuntimeInterface {
     fn audio_record_collect(
         &mut self,
         app_id: SDKAppId,
-        max_data: usize,
+        max_samples: usize,
         wait_if_empty: bool,
-    ) -> Result<&[u8], SDKError>;
+    ) -> Result<&[u32], SDKError>;
     /// Stop a recording session started with |audio_record_start|.
     fn audio_record_stop(&mut self, app_id: SDKAppId) -> Result<(), SDKError>;
 
@@ -428,7 +432,7 @@ pub trait SDKRuntimeInterface {
     ) -> Result<(), SDKError>;
     /// Writes data according to |audio_play_start|.
     /// The data are assumed in native (hardware) format.
-    fn audio_play_write(&mut self, app_id: SDKAppId, data: &[u8]) -> Result<(), SDKError>;
+    fn audio_play_write(&mut self, app_id: SDKAppId, data: &[u32]) -> Result<(), SDKError>;
     /// Stop a play session started with |audio_play_start|.
     fn audio_play_stop(&mut self, app_id: SDKAppId) -> Result<(), SDKError>;
 }
@@ -706,28 +710,28 @@ pub fn sdk_audio_record_start(
 }
 
 #[inline]
-pub fn sdk_audio_record_collect_non_blocking(data: &mut [u8]) -> Result<usize, SDKRuntimeError> {
+pub fn sdk_audio_record_collect_non_blocking(data: &mut [u32]) -> Result<usize, SDKRuntimeError> {
     let response = sdk_request::<AudioRecordCollectRequest, AudioRecordCollectResponse>(
         SDKRuntimeRequest::AudioRecordCollect,
         &AudioRecordCollectRequest {
-            max_data: data.len(),
+            max_samples: data.len(),
             wait_if_empty: false,
         },
     )?;
-    data[..response.data.len()].copy_from_slice(response.data);
+    data[..response.data.len()].copy_from_slice(response.data.to_vec().as_slice());
     Ok(response.data.len())
 }
 
 #[inline]
-pub fn sdk_audio_record_collect(data: &mut [u8]) -> Result<usize, SDKRuntimeError> {
+pub fn sdk_audio_record_collect(data: &mut [u32]) -> Result<usize, SDKRuntimeError> {
     let response = sdk_request::<AudioRecordCollectRequest, AudioRecordCollectResponse>(
         SDKRuntimeRequest::AudioRecordCollect,
         &AudioRecordCollectRequest {
-            max_data: data.len(),
+            max_samples: data.len(),
             wait_if_empty: true,
         },
     )?;
-    data[..response.data.len()].copy_from_slice(response.data);
+    data[..response.data.len()].copy_from_slice(response.data.to_vec().as_slice());
     Ok(response.data.len())
 }
 
@@ -748,10 +752,12 @@ pub fn sdk_audio_play_start(rate: usize, buffer_size: usize) -> Result<(), SDKRu
 }
 
 #[inline]
-pub fn sdk_audio_play_write(data: &[u8]) -> Result<(), SDKRuntimeError> {
+pub fn sdk_audio_play_write(data: &[u32]) -> Result<(), SDKRuntimeError> {
     sdk_request::<AudioPlayWriteRequest, ()>(
         SDKRuntimeRequest::AudioPlayWrite,
-        &AudioPlayWriteRequest { data },
+        &AudioPlayWriteRequest {
+            data: ZeroVec::from_slice_or_alloc(data),
+        },
     )
 }
 

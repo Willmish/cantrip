@@ -16,7 +16,7 @@
 //!
 //! This is a FIFO queue that overwrites when the buffer is full.
 
-pub const BUFFER_CAPACITY: usize = 512;
+const BUFFER_CAPACITY: usize = 1024; // XXX to match AUDIO_RECORD_CAPACITY
 
 type ItemType = u32;
 
@@ -51,6 +51,9 @@ impl Buffer {
 
     /// Returns available data slot to be written.
     pub fn available_space(&self) -> usize { BUFFER_CAPACITY - self.size }
+
+    /// Returns available data to be read.
+    pub fn available_data(&self) -> usize { self.size }
 
     /// Adds an item to the buffer.
     pub fn push(&mut self, item: ItemType) {

@@ -135,7 +135,7 @@ pub fn audio_record_stop() -> Result<(), SDKError> {
     Ok(())
 }
 
-pub fn audio_record_collect(data: &mut [u8], wait_if_empty: bool) -> Result<usize, SDKError> {
+pub fn audio_record_collect(data: &mut [u32], wait_if_empty: bool) -> Result<usize, SDKError> {
     let mut buf = RX_BUFFER.lock();
     // Optionally block until data is present. Note this may
     // block the caller which may block the runtime interface
@@ -147,19 +147,16 @@ pub fn audio_record_collect(data: &mut [u8], wait_if_empty: bool) -> Result<usiz
         }
         buf = RX_BUFFER.lock();
     }
-    let mut ix: usize = 0;
-    while let Some(b) = buf.pop() {
-        if ix + 3 < data.len() {
-            data[ix + 3] = (b >> 24) as u8;
-            data[ix + 2] = (b >> 16) as u8;
-            data[ix + 1] = (b >> 8) as u8;
-            data[ix + 0] = (b >> 0) as u8;
-            ix += 4;
+    let mut count = 0;
+    for i in 0..data.len() {
+        if let Some(b) = buf.pop() {
+            data[i] = b;
+            count += 1;
         } else {
             break;
         }
     }
-    Ok(ix)
+    Ok(count)
 }
 
 pub fn audio_play_start(rate: usize, _buffer_size: usize) -> Result<(), SDKError> {
@@ -196,13 +193,11 @@ pub fn audio_play_stop() -> Result<(), SDKError> {
 fn tx_fifo_level() -> u32 { get_fifo_status().txlvl().into() }
 fn rx_fifo_level() -> u32 { get_fifo_status().rxlvl().into() }
 
-pub fn audio_play_write(data: &[u8]) -> Result<(), SDKError> {
+pub fn audio_play_write(data: &[u32]) -> Result<(), SDKError> {
     trace!("play write {}", data.len());
-    assert!((data.len() % 4) == 0);
     let mut buf = TX_BUFFER.lock();
-    let mut ix: usize = 0;
-    while ix < data.len() {
-        if buf.available_space() < 4 {
+    for ix in 0..data.len() {
+        while buf.available_space() == 0 {
             trace!(
                 "wait for tx_watermark {ix} avail {} fifo {}",
                 buf.available_space(),
@@ -218,13 +213,8 @@ pub fn audio_play_write(data: &[u8]) -> Result<(), SDKError> {
                 buf.available_space(),
                 tx_fifo_level()
             );
-            continue;
         }
-        buf.push(data[ix + 3] as u32);
-        buf.push(data[ix + 2] as u32);
-        buf.push(data[ix + 1] as u32);
-        buf.push(data[ix + 0] as u32);
-        ix += 4;
+        buf.push(data[ix]);
     }
     if !buf.is_empty() {
         fill_tx_fifo(&mut buf);
@@ -239,11 +229,7 @@ pub fn audio_play_write(data: &[u8]) -> Result<(), SDKError> {
 fn fill_tx_fifo(buf: &mut Buffer) {
     const I2S_TX_FIFO_CAPACITY: u32 = 32;
 
-    trace!(
-        "fill_tx_fifo {} buf {}",
-        tx_fifo_level(),
-        buffer::BUFFER_CAPACITY - buf.available_space(),
-    );
+    trace!("fill_tx_fifo {} buf {}", tx_fifo_level(), buf.available_data());
     while tx_fifo_level() < I2S_TX_FIFO_CAPACITY {
         if let Some(b) = buf.pop() {
             set_wdata(b);
@@ -288,7 +274,7 @@ impl RxWatermarkInterfaceThread {
         trace!(
             "rx_watermark end, fifo {} buf {}",
             rx_fifo_level(),
-            buffer::BUFFER_CAPACITY - buf.available_space()
+            buf.available_data()
         );
     }
 }
@@ -299,17 +285,16 @@ impl TxWatermarkInterfaceThread {
         trace!("handle tx_watermark");
         let mut buf = TX_BUFFER.lock();
         fill_tx_fifo(&mut buf);
-        if buf.available_space() >= (16 * 4) {
+        if buf.available_space() >= 16 {
             unsafe {
                 TX_EMPTY.post();
             }
         }
-        // XXX enable/disable ctrl.tx based on fifo level?
         set_intr_state(IntrState::new().with_tx_watermark(true));
         trace!(
             "tx_watermark end, fifo {} buf {}",
             tx_fifo_level(),
-            buffer::BUFFER_CAPACITY - buf.available_space()
+            buf.available_data()
         );
     }
 }

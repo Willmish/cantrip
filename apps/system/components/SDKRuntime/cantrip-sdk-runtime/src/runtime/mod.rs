@@ -30,6 +30,7 @@ use cantrip_security_interface::cantrip_security_delete_key;
 use cantrip_security_interface::cantrip_security_read_key;
 use cantrip_security_interface::cantrip_security_write_key;
 use core::hash::BuildHasher;
+use core::mem::size_of;
 use hashbrown::HashMap;
 cfg_if! {
     if #[cfg(feature = "ml_support")] {
@@ -92,10 +93,10 @@ const MODEL_ID: ModelId = 31;
 // Max TimerId an application can use.
 const MAX_TIMER_ID: TimerId = (MODEL_ID - 1) as TimerId;
 
-// Size of audio recording buffer. This holds samples to be returned to
-// a user via an |audio_record_collect| call. The buffer is allocated on
-// the heap while actively recording.
-const AUDIO_RECORD_CAPACITY: usize = 1024; // XXX maybe match i2s::buffer::BUFFER_CAPACITY
+// Size of audio recording buffer (in u32's). This holds samples to be
+// returned to a user via an |audio_record_collect| call. The buffer is
+// allocated on the heap while actively recording.
+const AUDIO_RECORD_CAPACITY: usize = 4096 / size_of::<u32>(); // 4KB XXX maybe match i2s::buffer::BUFFER_CAPACITY
 
 #[allow(dead_code)]
 #[derive(PartialEq)]
@@ -141,24 +142,24 @@ impl ModelState {
 #[derive(PartialEq)]
 enum AudioRecordState {
     Idle,
-    Recording(Box<[u8; AUDIO_RECORD_CAPACITY]>),
+    Recording(Box<[u32; AUDIO_RECORD_CAPACITY]>),
 }
 #[allow(dead_code)]
 impl AudioRecordState {
     pub fn is_idle(&self) -> bool { matches!(self, AudioRecordState::Idle) }
     pub fn is_recording(&self) -> bool { matches!(self, AudioRecordState::Recording(_)) }
-    pub fn get_data(&self, max_data: usize) -> &[u8] {
+    pub fn get_data(&self, max_samples: usize) -> &[u32] {
         match self {
             AudioRecordState::Recording(data) => {
-                &data[..core::cmp::min(max_data, AUDIO_RECORD_CAPACITY)]
+                &data[..core::cmp::min(max_samples, AUDIO_RECORD_CAPACITY)]
             }
             _ => unimplemented!(),
         }
     }
-    pub fn get_data_mut(&mut self, max_data: usize) -> &mut [u8] {
+    pub fn get_data_mut(&mut self, max_samples: usize) -> &mut [u32] {
         match self {
             AudioRecordState::Recording(data) => {
-                &mut data[..core::cmp::min(max_data, AUDIO_RECORD_CAPACITY)]
+                &mut data[..core::cmp::min(max_samples, AUDIO_RECORD_CAPACITY)]
             }
             _ => unimplemented!(),
         }
@@ -829,7 +830,7 @@ impl SDKRuntimeInterface for SDKRuntime {
                 i2s_driver::audio_record_start(rate, buffer_size, stop_on_full)?;
                 // XXX buffer_size
                 // XXX new_uninit
-                app.audio_record_state = AudioRecordState::Recording(Box::new([0u8; AUDIO_RECORD_CAPACITY]));
+                app.audio_record_state = AudioRecordState::Recording(Box::new([0u32; AUDIO_RECORD_CAPACITY]));
                 Ok(())
             } else {
                 Err(SDKError::NoPlatformSupport)
@@ -840,17 +841,17 @@ impl SDKRuntimeInterface for SDKRuntime {
     fn audio_record_collect(
         &mut self,
         app_id: SDKAppId,
-        max_data: usize,
+        max_samples: usize,
         wait_if_empty: bool,
-    ) -> Result<&[u8], SDKError> {
-        trace!("audio_record_collect {max_data}");
+    ) -> Result<&[u32], SDKError> {
+        trace!("audio_record_collect {max_samples}");
         let app = self.get_mut_app(app_id)?;
         if !app.audio_record_state.is_recording() {
             return Err(SDKError::InvalidAudioState);
         }
         cfg_if! {
             if #[cfg(feature = "audio_support")] {
-                let data = app.audio_record_state.get_data_mut(max_data);
+                let data = app.audio_record_state.get_data_mut(max_samples);
                 // XXX pin?
                 let count = i2s_driver::audio_record_collect(data, wait_if_empty)?;
                 Ok(&data[..count])
@@ -894,7 +895,7 @@ impl SDKRuntimeInterface for SDKRuntime {
         }
     }
     #[allow(unused_variables)]
-    fn audio_play_write(&mut self, app_id: SDKAppId, data: &[u8]) -> Result<(), SDKError> {
+    fn audio_play_write(&mut self, app_id: SDKAppId, data: &[u32]) -> Result<(), SDKError> {
         trace!("audio_play_write {}", data.len());
         let app = self.get_mut_app(app_id)?;
         if !app.audio_play_state.is_playing() {

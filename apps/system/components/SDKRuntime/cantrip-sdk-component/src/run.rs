@@ -42,6 +42,7 @@ use cantrip_sdk_manager::SDKManagerRequest;
 use cantrip_sdk_manager::SDK_MANAGER_REQUEST_DATA_SIZE;
 use cantrip_sdk_runtime::CantripSDKRuntime;
 use log::{error, info};
+use zerovec::ZeroVec;
 
 use camkes::*;
 use logger::*;
@@ -647,10 +648,14 @@ impl SdkRuntimeControlThread {
             postcard::from_bytes::<sdk_interface::AudioRecordCollectRequest>(request_slice)
                 .map_err(deserialize_failure)?;
         let mut sdk = cantrip_sdk();
-        let data = sdk.audio_record_collect(app_id, request.max_data, request.wait_if_empty)?;
-        let _ =
-            postcard::to_slice(&sdk_interface::AudioRecordCollectResponse { data }, reply_slice)
-                .map_err(serialize_failure)?;
+        let data = sdk.audio_record_collect(app_id, request.max_samples, request.wait_if_empty)?;
+        let _ = postcard::to_slice(
+            &sdk_interface::AudioRecordCollectResponse {
+                data: ZeroVec::from_slice_or_alloc(data),
+            },
+            reply_slice,
+        )
+        .map_err(serialize_failure)?;
         Ok(())
     }
 
@@ -679,7 +684,7 @@ impl SdkRuntimeControlThread {
     ) -> Result<(), SDKError> {
         let request = postcard::from_bytes::<sdk_interface::AudioPlayWriteRequest>(request_slice)
             .map_err(deserialize_failure)?;
-        cantrip_sdk().audio_play_write(app_id, request.data)
+        cantrip_sdk().audio_play_write(app_id, request.data.to_vec().as_slice())
     }
 
     fn audio_play_stop_request(

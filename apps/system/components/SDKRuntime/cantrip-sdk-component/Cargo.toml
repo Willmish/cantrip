@@ -45,6 +45,7 @@ paste = "1.0"
 postcard = { version = "0.7", features = ["alloc"], default-features = false }
 sdk-interface = { path = "../sdk-interface" }
 static_assertions = "1.1"
+zerovec = { version = "0.10", features = ["serde"] }
 
 [lib]
 name = "cantrip_sdk_runtime"

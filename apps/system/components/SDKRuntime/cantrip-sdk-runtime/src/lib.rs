@@ -213,13 +213,13 @@ impl SDKRuntimeInterface for Guard<'_> {
     fn audio_record_collect(
         &mut self,
         app_id: SDKAppId,
-        max_data: usize,
+        max_samples: usize,
         wait_if_empty: bool,
-    ) -> Result<&[u8], SDKError> {
+    ) -> Result<&[u32], SDKError> {
         self.runtime
             .as_mut()
             .unwrap()
-            .audio_record_collect(app_id, max_data, wait_if_empty)
+            .audio_record_collect(app_id, max_samples, wait_if_empty)
     }
     fn audio_record_stop(&mut self, app_id: SDKAppId) -> Result<(), SDKError> {
         self.runtime.as_mut().unwrap().audio_record_stop(app_id)
@@ -236,7 +236,7 @@ impl SDKRuntimeInterface for Guard<'_> {
             .unwrap()
             .audio_play_start(app_id, rate, buffer_size)
     }
-    fn audio_play_write(&mut self, app_id: SDKAppId, data: &[u8]) -> Result<(), SDKError> {
+    fn audio_play_write(&mut self, app_id: SDKAppId, data: &[u32]) -> Result<(), SDKError> {
         self.runtime
             .as_mut()
             .unwrap()
