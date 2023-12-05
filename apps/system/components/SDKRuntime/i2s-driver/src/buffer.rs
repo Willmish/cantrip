@@ -16,7 +16,7 @@
 //!
 //! This is a FIFO queue that overwrites when the buffer is full.
 
-const BUFFER_CAPACITY: usize = 1024; // XXX to match AUDIO_RECORD_CAPACITY
+const BUFFER_CAPACITY: usize = 2048; // NB: intentionally 2x AUDIO_RECORD_CAPACITY
 
 type ItemType = u32;
 

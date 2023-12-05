@@ -14,7 +14,7 @@
 #![no_std]
 
 use cantrip_os_common::camkes::semaphore::seL4_Semaphore;
-use log::{error, trace};
+use log::{error, info, trace};
 use sdk_interface::SDKError;
 use spin::Mutex;
 
@@ -61,11 +61,11 @@ pub fn audio_reset(rxrst: bool, txrst: bool, rxilvl: u8, txilvl: u8) -> Result<(
         }
     }
     trace!("audio_reset {rxrst} {txrst} {rxilvl} {txilvl}");
-    {
+    if txrst {
         let mut buf = RX_BUFFER.lock();
         audio_stop_recording(&mut buf);
     }
-    {
+    if rxrst {
         let mut buf = TX_BUFFER.lock();
         audio_stop_playing(&mut buf);
     }
@@ -91,8 +91,9 @@ fn audio_stop_recording(buf: &mut Buffer) {
     trace!("audio_stop_recording");
     // NB: must be called with RX_BUFFER lock held
     set_ctrl(get_ctrl().with_rx(false));
-    set_intr_enable(IntrEnable::new().with_rx_watermark(false));
-    set_intr_state(IntrState::new().with_rx_watermark(false));
+    set_fifo_ctrl(get_fifo_ctrl().with_rxrst(true)); // Flush RX FIFO
+    set_intr_enable(get_intr_enable().with_rx_watermark(false));
+    set_intr_state(get_intr_state().with_rx_watermark(false));
     audio_drain_rx_fifo();
     buf.clear();
 }
@@ -117,13 +118,12 @@ pub fn audio_record_start(
         return Err(SDKError::InvalidAudioParameter);
     }
     // XXX or force client to stop?
-    audio_stop_recording(&mut buf);
-    buf.clear();
+//    audio_stop_recording(&mut buf);
     unsafe {
         RX_STOP_ON_FULL = stop_on_full;
     }
-    set_intr_state(IntrState::new().with_rx_watermark(true));
-    set_intr_enable(IntrEnable::new().with_rx_watermark(true));
+    set_intr_state(get_intr_state().with_rx_watermark(true));
+    set_intr_enable(get_intr_enable().with_rx_watermark(true));
     set_ctrl(get_ctrl().with_rx(true).with_nco_rx(nco_rx as u8));
     Ok(())
 }
@@ -137,23 +137,27 @@ pub fn audio_record_stop() -> Result<(), SDKError> {
 
 pub fn audio_record_collect(data: &mut [u32], wait_if_empty: bool) -> Result<usize, SDKError> {
     let mut buf = RX_BUFFER.lock();
-    // Optionally block until data is present. Note this may
-    // block the caller which may block the runtime interface
-    // thread which in turn may block other apps/clients.
-    while wait_if_empty && buf.is_empty() {
-        drop(buf);
-        unsafe {
-            RX_NONEMPTY.wait();
-        }
-        buf = RX_BUFFER.lock();
-    }
     let mut count = 0;
-    for i in 0..data.len() {
+    while count < data.len() {
         if let Some(b) = buf.pop() {
-            data[i] = b;
+            data[count] = b;
             count += 1;
         } else {
-            break;
+            // Optionally block until data is present. Note this may
+            // block the caller which may block the runtime interface
+            // thread which in turn may block other apps/clients.
+            if wait_if_empty {
+                // XXX maybe check count < data.len / 2 or similar?
+                while buf.is_empty() {
+                    drop(buf);
+                    unsafe {
+                        RX_NONEMPTY.wait();
+                    }
+                    buf = RX_BUFFER.lock();
+                }
+            } else {
+                break;
+            }
         }
     }
     Ok(count)
@@ -175,10 +179,10 @@ pub fn audio_play_start(rate: usize, _buffer_size: usize) -> Result<(), SDKError
         return Err(SDKError::InvalidAudioParameter);
     }
     // XXX or force client to stop?
-    audio_stop_playing(&mut buf);
     buf.clear();
-    set_intr_state(IntrState::new().with_tx_watermark(true));
-    set_intr_enable(IntrEnable::new().with_tx_watermark(true));
+//    audio_stop_playing(&mut buf);
+    set_intr_state(get_intr_state().with_tx_watermark(true));
+    set_intr_enable(get_intr_enable().with_tx_watermark(true));
     set_ctrl(get_ctrl().with_tx(true).with_nco_tx(nco_tx as u8));
     Ok(())
 }
@@ -186,6 +190,16 @@ pub fn audio_play_start(rate: usize, _buffer_size: usize) -> Result<(), SDKError
 pub fn audio_play_stop() -> Result<(), SDKError> {
     trace!("audio_play_stop");
     let mut buf = TX_BUFFER.lock();
+    // XXX client may want to flush instead of waiting
+    while !buf.is_empty() || tx_fifo_level() > 0 {
+        fill_tx_fifo(&mut buf);
+        drop(buf);
+        unsafe {
+            // XXX TxWatermark posts when buf is empty
+            TX_EMPTY.wait();
+        }
+        buf = TX_BUFFER.lock();
+    }
     audio_stop_playing(&mut buf);
     Ok(())
 }
@@ -239,11 +253,13 @@ fn fill_tx_fifo(buf: &mut Buffer) {
     }
 }
 
-fn audio_stop_playing(_buf: &mut Buffer) {
-    // Could drain buffer + fifo
+fn audio_stop_playing(buf: &mut Buffer) {
+    // NB: caller must drain buffer
+    assert!(buf.is_empty());
     set_ctrl(get_ctrl().with_tx(false));
-    set_intr_state(IntrState::new().with_tx_watermark(false));
-    set_intr_enable(IntrEnable::new().with_tx_watermark(false));
+    set_fifo_ctrl(get_fifo_ctrl().with_txrst(true)); // Flush TX FIFO
+    set_intr_state(get_intr_state().with_tx_watermark(false));
+    set_intr_enable(get_intr_enable().with_tx_watermark(false));
 }
 
 // IRQ Support.
@@ -270,7 +286,7 @@ impl RxWatermarkInterfaceThread {
                 RX_NONEMPTY.post();
             }
         }
-        set_intr_state(IntrState::new().with_rx_watermark(true));
+        set_intr_state(get_intr_state().with_rx_watermark(true));
         trace!(
             "rx_watermark end, fifo {} buf {}",
             rx_fifo_level(),
@@ -290,7 +306,7 @@ impl TxWatermarkInterfaceThread {
                 TX_EMPTY.post();
             }
         }
-        set_intr_state(IntrState::new().with_tx_watermark(true));
+        set_intr_state(get_intr_state().with_tx_watermark(true));
         trace!(
             "tx_watermark end, fifo {} buf {}",
             tx_fifo_level(),
