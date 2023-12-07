@@ -14,6 +14,7 @@
 #![no_std]
 
 use cantrip_os_common::camkes::semaphore::seL4_Semaphore;
+#[allow(unused_imports)]
 use log::{error, info, trace};
 use sdk_interface::SDKError;
 use spin::Mutex;
@@ -32,7 +33,60 @@ extern "Rust" {
 
 use reg_constants::platform::TOP_MATCHA_SMC_I2S_CLOCK_FREQ_PERIPHERAL_HZ as CLK_FIXED_FREQ_HZ;
 
-static RX_BUFFER: Mutex<Buffer> = Mutex::new(Buffer::new());
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WhichBuffer {
+    A,
+    B,
+}
+
+struct DoubleBuffer {
+    pub buffer_a: Buffer,
+    pub buffer_b: Buffer,
+    // Front is the current buffer to read received data
+    pub front: WhichBuffer,
+    // Back is the current buffer to write received data (from the RX FIFO)
+    pub back: WhichBuffer,
+}
+impl DoubleBuffer {
+    pub const fn new() -> Self {
+        Self {
+            buffer_a: Buffer::new(),
+            buffer_b: Buffer::new(),
+            front: WhichBuffer::B,
+            back: WhichBuffer::A,
+        }
+    }
+    pub fn front(&mut self) -> &mut Buffer {
+        if self.front == WhichBuffer::A {
+            &mut self.buffer_a
+        } else {
+            &mut self.buffer_b
+        }
+    }
+    pub fn back(&mut self) -> &mut Buffer {
+        if self.back == WhichBuffer::A {
+            &mut self.buffer_a
+        } else {
+            &mut self.buffer_b
+        }
+    }
+    pub fn flip(&mut self) -> bool {
+        assert!(self.back().available_space() == 0);
+        if self.front().is_empty() {
+            let next = self.front;
+            self.front = self.back;
+            self.back = next;
+            true
+        } else {
+            false // NB: will lose data, maybe count
+        }
+    }
+    pub fn clear(&mut self) {
+        self.front().clear();
+        self.back().clear();
+    }
+}
+static RX_BUFFER: Mutex<DoubleBuffer> = Mutex::new(DoubleBuffer::new());
 static mut RX_STOP_ON_FULL: bool = false; // NB: protected by RX_BUFFER
 static TX_BUFFER: Mutex<Buffer> = Mutex::new(Buffer::new());
 
@@ -87,7 +141,7 @@ fn audio_drain_rx_fifo() {
     }
     trace!("audio_drain_rx_fifo end");
 }
-fn audio_stop_recording(buf: &mut Buffer) {
+fn audio_stop_recording(buf: &mut DoubleBuffer) {
     trace!("audio_stop_recording");
     // NB: must be called with RX_BUFFER lock held
     set_ctrl(get_ctrl().with_rx(false));
@@ -111,14 +165,14 @@ pub fn audio_record_start(
         }
     }
     trace!("audio_record_start rate {rate} stop_on_full {stop_on_full}");
-    let mut buf = RX_BUFFER.lock();
+    let mut _buf = RX_BUFFER.lock();
     let nco_rx = CLK_FIXED_FREQ_HZ / (nz(2 * rate) as u64);
     if nco_rx > reg_constants::i2s::I2S_CTRL_NCO_RX_MASK as u64 {
         error!("bad nco_rx {nco_rx} for rate {rate}");
         return Err(SDKError::InvalidAudioParameter);
     }
     // XXX or force client to stop?
-//    audio_stop_recording(&mut buf);
+    //    audio_stop_recording(buf);
     unsafe {
         RX_STOP_ON_FULL = stop_on_full;
     }
@@ -136,7 +190,8 @@ pub fn audio_record_stop() -> Result<(), SDKError> {
 }
 
 pub fn audio_record_collect(data: &mut [u32], wait_if_empty: bool) -> Result<usize, SDKError> {
-    let mut buf = RX_BUFFER.lock();
+    let mut guard = RX_BUFFER.lock();
+    let mut buf = guard.front();
     let mut count = 0;
     while count < data.len() {
         if let Some(b) = buf.pop() {
@@ -148,12 +203,14 @@ pub fn audio_record_collect(data: &mut [u32], wait_if_empty: bool) -> Result<usi
             // thread which in turn may block other apps/clients.
             if wait_if_empty {
                 // XXX maybe check count < data.len / 2 or similar?
+                trace!("wait for flip");
                 while buf.is_empty() {
-                    drop(buf);
+                    drop(guard);
                     unsafe {
                         RX_NONEMPTY.wait();
                     }
-                    buf = RX_BUFFER.lock();
+                    guard = RX_BUFFER.lock();
+                    buf = guard.front();
                 }
             } else {
                 break;
@@ -180,7 +237,7 @@ pub fn audio_play_start(rate: usize, _buffer_size: usize) -> Result<(), SDKError
     }
     // XXX or force client to stop?
     buf.clear();
-//    audio_stop_playing(&mut buf);
+    //    audio_stop_playing(&mut buf);
     set_intr_state(get_intr_state().with_tx_watermark(true));
     set_intr_enable(get_intr_enable().with_tx_watermark(true));
     set_ctrl(get_ctrl().with_tx(true).with_nco_tx(nco_tx as u8));
@@ -270,27 +327,32 @@ impl RxWatermarkInterfaceThread {
     pub fn handler() {
         trace!("rx_watermark begin");
         // Drain the RX fifo; data goes to the RX_BUFFER.
-        let mut buf = RX_BUFFER.lock();
+        let mut guard = RX_BUFFER.lock();
         if unsafe { RX_STOP_ON_FULL } {
+            let buf = guard.back();
             while rx_fifo_level() > 0 && buf.available_space() > 0 {
                 buf.push(get_rdata());
             }
         } else {
+            let buf = guard.back();
             while rx_fifo_level() > 0 {
                 buf.push(get_rdata());
             }
         }
-        if !buf.is_empty() {
-            // Data is available, wakeup any waiters.
-            unsafe {
-                RX_NONEMPTY.post();
+        if guard.back().available_space() == 0 {
+            if guard.flip() {
+                trace!("buffer flip");
+                // Notify any waiters of the buffer flip.
+                unsafe {
+                    RX_NONEMPTY.post();
+                }
             }
         }
         set_intr_state(get_intr_state().with_rx_watermark(true));
         trace!(
             "rx_watermark end, fifo {} buf {}",
             rx_fifo_level(),
-            buf.available_data()
+            guard.back().available_data()
         );
     }
 }
