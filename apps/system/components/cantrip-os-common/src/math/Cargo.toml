@@ -3,4 +3,9 @@ name = "math"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+fp_compat = []
+
 [dependencies]
+cfg-if = "1.0"
