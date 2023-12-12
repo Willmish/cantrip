@@ -459,7 +459,6 @@ fn sdk_request<'a, S: Serialize, D: Deserialize<'a>>(
 
     // NB: server-side must do the same split
     let (request_slice, reply_slice) = params_slice.split_at_mut(SDKRUNTIME_REQUEST_DATA_SIZE);
-    reply_slice.fill(0); // XXX paranoid, could zero-pad request too
 
     // Encode request arguments.
     let _ = postcard::to_slice(request_args, request_slice)
