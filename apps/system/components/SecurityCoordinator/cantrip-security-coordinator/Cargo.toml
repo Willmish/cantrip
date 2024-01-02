@@ -23,7 +23,7 @@ fake = ["cpio"]
 sec = ["mailbox-driver"]
 
 [dependencies]
-ahash = { version = "0.8.6", default-features = false, features = ["compile-time-rng"] }
+ahash = { version = "=0.8.6", default-features = false, features = ["compile-time-rng"] }
 cantrip-memory-interface = { path = "../../MemoryManager/cantrip-memory-interface" }
 cantrip-os-common = { path = "../../cantrip-os-common" }
 cantrip-security-interface = { path = "../cantrip-security-interface" }

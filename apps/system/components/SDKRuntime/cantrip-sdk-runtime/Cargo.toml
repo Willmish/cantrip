@@ -32,7 +32,7 @@ CONFIG_PLAT_NEXUS = ["timer_support", "ml_support", "audio_support"]
 
 
 [dependencies]
-ahash = { version = "0.8.6", default-features = false, features = ["compile-time-rng"] }
+ahash = { version = "=0.8.6", default-features = false, features = ["compile-time-rng"] }
 bitvec = { version = "1.0", default-features = false }
 cfg-if = "1.0"
 const-random = { version = "0.1.17" }

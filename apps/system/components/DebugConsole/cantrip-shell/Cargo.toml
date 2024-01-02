@@ -62,7 +62,7 @@ TEST_TIMER_SERVICE = []
 TEST_UART = []
 
 [dependencies]
-ahash = { version = "0.8.6", default-features = false, features = ["compile-time-rng"] }
+ahash = { version = "=0.8.6", default-features = false, features = ["compile-time-rng"] }
 const-random = { version = "0.1.17" }
 crc = { version = "1.4.0", default-features = false }
 hashbrown = { version = "0.14.2" }
