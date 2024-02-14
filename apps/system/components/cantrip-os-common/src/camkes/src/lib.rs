@@ -40,6 +40,7 @@ use sel4_sys::seL4_SetCap;
 use sel4_sys::seL4_SetCapReceivePath;
 use sel4_sys::seL4_Word;
 use sel4_sys::seL4_WordBits;
+use sel4_sys::seL4_Error;
 
 pub mod baresema;
 pub mod irq;
@@ -218,7 +219,8 @@ impl Camkes {
 
     // Deletes the capability at |path|,
     pub fn delete_path(path: &seL4_CPath) -> seL4_Result {
-        unsafe { seL4_CNode_Delete(path.0, path.1, path.2 as u8) }
+        let result_error: seL4_Error = unsafe { seL4_CNode_Delete(path.0, path.1, path.2 as u8).error as usize}.into();
+        result_error.into()
     }
 
     // Attaches a capability to a CAmkES RPC request MessageInfo and

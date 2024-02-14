@@ -370,7 +370,11 @@ impl<'a> CantripOsModel<'a> {
                         1,
                     )?;
                     let temp_addr = seL4_Page_GetAddress(temp_slot)?;
-                    seL4_CNode_Delete(seL4_CapInitThreadCNode, temp_slot, seL4_WordBits as u8)?;
+                    // TODO: @Willmish might instead implement the Try trait for seL4_CNode_Delete to unwrap the error rather than
+                    // do this type conversion
+                    Into::<seL4_Result>::into(Into::<seL4_Error>::into(
+                        seL4_CNode_Delete(seL4_CapInitThreadCNode, temp_slot, seL4_WordBits as u8).error as usize)
+                    )?;
                     Ok(temp_addr)
                 }
             }
@@ -402,13 +406,15 @@ impl<'a> CantripOsModel<'a> {
                     }?;
                     if free_slot_addr == paddr {
                         // Found our object, delete any holding cap.
+                        // TODO: @Willmish might instead implement the Try trait for seL4_CNode_Delete to unwrap the error rather than
+                        // do this type conversion
                         if let Some(hold_slot_cap) = hold_slot {
                             unsafe {
-                                seL4_CNode_Delete(
+                                Into::<seL4_Result>::into(Into::<seL4_Error>::into(seL4_CNode_Delete(
                                     seL4_CapInitThreadCNode,
                                     hold_slot_cap,
                                     seL4_WordBits as u8,
-                                )
+                                ).error as usize))
                             }?;
                         }
                         return Ok(());
@@ -433,11 +439,13 @@ impl<'a> CantripOsModel<'a> {
                         }?;
                     } else {
                         unsafe {
-                            seL4_CNode_Delete(
+                            // TODO: @Willmish might instead implement the Try trait for seL4_CNode_Delete to unwrap the error rather than
+                            // do this type conversion
+                            Into::<seL4_Result>::into(Into::<seL4_Error>::into(seL4_CNode_Delete(
                                 seL4_CapInitThreadCNode,
                                 free_slot,
                                 seL4_WordBits as u8,
-                            )
+                            ).error as usize))
                         }?;
                     }
                 }

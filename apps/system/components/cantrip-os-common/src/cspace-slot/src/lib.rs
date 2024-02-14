@@ -31,6 +31,7 @@ use sel4_sys::seL4_Result;
 use sel4_sys::seL4_SetCapReceivePath;
 use sel4_sys::seL4_Word;
 use sel4_sys::seL4_WordBits;
+use sel4_sys::seL4_Error;
 
 extern "C" {
     static SELF_CNODE: seL4_CPtr;
@@ -193,7 +194,8 @@ impl CSpaceSlot {
     /// Delete any cap in our slot.
     // NB: deleting an empty slot is a noop to seL4
     pub fn delete(&self) -> seL4_Result {
-        unsafe { seL4_CNode_Delete(SELF_CNODE, self.slot, seL4_WordBits as u8) }
+        let result_error: seL4_Error = unsafe { seL4_CNode_Delete(SELF_CNODE, self.slot, seL4_WordBits as u8).error as usize }.into();
+        result_error.into()
     }
 }
 impl Drop for CSpaceSlot {

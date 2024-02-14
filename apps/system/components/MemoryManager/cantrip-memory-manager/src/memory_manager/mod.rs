@@ -45,7 +45,7 @@ extern "Rust" {
     static SELF_CNODE: seL4_CPtr;
 }
 
-fn delete_path(path: &seL4_CPath) -> seL4_Result {
+fn delete_path(path: &seL4_CPath) -> seL4_CNode_Delete {
     unsafe { seL4_CNode_Delete(path.0, path.1, path.2 as u8) }
 }
 fn revoke_cap(cptr: seL4_CPtr) -> seL4_Result {
@@ -332,9 +332,12 @@ impl MemoryManager {
     fn delete_caps(root: seL4_CPtr, depth: u8, od: &ObjDesc) -> seL4_Result {
         for offset in 0..od.retype_count() {
             let path = (root, od.cptr + offset, depth as usize);
-            if let Err(e) = delete_path(&path) {
+            // TODO: @Willmish here unwrap the error, untypedSlabIndex and isLastReference to use for book keeping
+            let result: seL4_CNode_Delete = delete_path(&path);
+            if let Err(e) =  Into::<seL4_Result>::into(Into::<seL4_Error>::into(result.error as usize)) {
                 warn!("DELETE {:?} failed: od {:?} error {:?}", &path, od, e);
             }
+            info!("untypedSlabIndex: {} isLastReference {}", result.untypedSlabIndex, if result.isLastReference != 0 { "True" } else { "False" });
         }
         Ok(())
     }

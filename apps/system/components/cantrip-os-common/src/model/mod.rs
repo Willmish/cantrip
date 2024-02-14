@@ -373,13 +373,14 @@ impl<'a> CantripOsModel<'a> {
     // for CAmkES components.
     pub fn handoff_capabilities(&mut self) -> seL4_Result {
         fn delete_cap(cptr: seL4_CPtr) -> seL4_Result {
-            unsafe {
+            let result_error: seL4_Error = unsafe {
                 seL4_CNode_Delete(
                     /*src_root=*/ seL4_CapInitThreadCNode,
                     /*src_index=*/ cptr,
                     /*src_depth=*/ seL4_WordBits as u8,
-                )
-            }
+                ).error as usize
+            }.into();
+            result_error.into()
         }
         // Well-known caps created by the kernel.
         let kernel_caps = [
