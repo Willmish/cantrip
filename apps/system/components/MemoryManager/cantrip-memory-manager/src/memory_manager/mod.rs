@@ -76,6 +76,8 @@ const STATIC_UNTYPED_SLAB_CAPACITY: usize = 4; // # slabs kept inline
 struct UntypedSlab {
     pub _size_bits: usize,      // NB: only used to sort
     pub free_bytes: usize,      // Available space in slab
+    pub allocated_bytes: usize,  // How many bytes of memory are currently allocated
+    pub allocated_objects: usize,   // Number of objects in the slab currently
     pub _base_paddr: seL4_Word, // Physical address of slab start
     pub _last_paddr: seL4_Word, // Physical address of slab end
     pub cptr: seL4_CPtr,        // seL4 untyped object
@@ -85,6 +87,8 @@ impl UntypedSlab {
         UntypedSlab {
             _size_bits: ut.size_bits(),
             free_bytes,
+            allocated_bytes: 0,
+            allocated_objects: 0,
             _base_paddr: ut.paddr,
             _last_paddr: ut.paddr + l2tob(ut.size_bits()),
             cptr,
@@ -193,6 +197,8 @@ impl MemoryManager {
                             match Self::new_untyped(ut_cptr, align_bits) {
                                 Ok(free_untyped) => {
                                     m.untypeds.push(UntypedSlab::new(
+                                        // TODO: originally was ut, @Willmish need to update to reflect the size of the new Untyped!!
+                                        // See: output of mdebug
                                         ut, /*XXX*/
                                         l2tob(align_bits),
                                         free_untyped,
@@ -329,7 +335,7 @@ impl MemoryManager {
         }
     }
 
-    fn delete_caps(root: seL4_CPtr, depth: u8, od: &ObjDesc) -> seL4_Result {
+    fn delete_caps(&mut self, root: seL4_CPtr, depth: u8, od: &ObjDesc) -> seL4_Result {
         for offset in 0..od.retype_count() {
             let path = (root, od.cptr + offset, depth as usize);
             // TODO: @Willmish here unwrap the error, untypedSlabIndex and isLastReference to use for book keeping
@@ -338,6 +344,23 @@ impl MemoryManager {
                 warn!("DELETE {:?} failed: od {:?} error {:?}", &path, od, e);
             }
             info!("untypedSlabIndex: {} isLastReference {}", result.untypedSlabIndex, if result.isLastReference != 0 { "True" } else { "False" });
+
+            // TODO: update bookkeeping for correct slab, reset size if allocated_objects drops to 0
+            if result.isLastReference != 0 && result.untypedSlabIndex != 0 {
+                // TODO: @Willmish - to be replaced by a hashmap or a SmallVec with cptr -> self.untypeds mappign!
+                for i in 0..self.untypeds.len() {
+                    if self.untypeds[i].cptr == result.untypedSlabIndex {
+                        self.untypeds[i].allocated_objects -= 1;
+                        // NOTE: for now decrementing by one at each dealloc, since objects could potentially span multiple CNodes?
+                        // check if object count dropped to 0
+                        if self.untypeds[i].allocated_objects == 0 {
+                            // reset the slab!
+                            self.untypeds[i].allocated_bytes = 0;
+                        }
+                        break;
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -432,6 +455,10 @@ impl MemoryManagerInterface for MemoryManager {
         self.requested_objs += allocated_objs;
         self.requested_bytes += allocated_bytes;
 
+        // Update bookkeeping info for current slab
+        self.untypeds[ut_index].allocated_bytes += allocated_bytes;
+        self.untypeds[ut_index].allocated_objects += allocated_objs;
+
         Ok(())
     }
     fn free(&mut self, bundle: &ObjDescBundle) -> Result<(), MemoryManagerError> {
@@ -440,7 +467,7 @@ impl MemoryManagerInterface for MemoryManager {
         for od in &bundle.objs {
             // TODO(sleffler): support leaving objects so client can do bulk
             //   reclaim on exit (maybe require cptr != 0)
-            if Self::delete_caps(bundle.cnode, bundle.depth, od).is_ok() {
+            if self.delete_caps(bundle.cnode, bundle.depth, od).is_ok() {
                 // NB: atm we do not do per-untyped bookkeeping so just track
                 //   global stats.
                 // TODO(sleffler): temp workaround for bad bookkeeping / client mis-handling
