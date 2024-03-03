@@ -102,6 +102,8 @@ pub struct MemoryManager {
     cur_untyped: usize,
     cur_static_untyped: usize,
     _cur_device_untyped: usize,
+    //_map_cptr_untypeds: HashMap<seL4_CPtr, usize>, // Map from CNode cptr index to untypeds SmallVec index
+    //_map_cptr_untypeds: SmallVec<[usize; UNTYPED_SLAB_CAPACITY]>, // Map from CNode cptr index to untypeds SmallVec index
 
     total_bytes: usize,     // Total available space
     allocated_bytes: usize, // Amount of space currently allocated
@@ -138,6 +140,8 @@ impl MemoryManager {
             cur_untyped: 0,
             cur_static_untyped: 0,
             _cur_device_untyped: 0,
+            //_map_cptr_untypeds: HashMap::<seL4_CPtr, usize>::new(), // TODO: @Willmish possibly initialise with capacity, min length of bootinfo untypeds
+            //_map_cptr_untypeds: SmallVec::new(),
 
             total_bytes: 0,
             allocated_bytes: 0,
@@ -243,6 +247,12 @@ impl MemoryManager {
             // "normal" slab.
             m.static_untypeds.push(m.untypeds.pop().unwrap());
         }
+        // Fill in the hashmap, mapping from CNode (cptr) index to an index into m.untypeds
+        //for i in 0..m.untypeds.len() {
+        //    // TODO: @Willmish ensure whether it is actually safe to do this: cptr should be unique, but maybe corner case?
+        //    m._map_cptr_untypeds.insert(m.untypeds[i].cptr, i);
+        //}
+        //info!("Map cptr untypeds: {:?}", m._map_cptr_untypeds);
         m
     }
 
@@ -502,14 +512,23 @@ impl MemoryManagerInterface for MemoryManager {
         for ut in &self.untypeds {
             let info = untyped_describe(ut.cptr);
             let size = l2tob(info.sizeBits);
+            if info.sizeBits != ut._size_bits {
+                info!("AAAAA, info.sizeBits {:}, ut._size_bits {:}", info.sizeBits, ut._size_bits);
+            }
             info!(target: if ut.cptr == cur_cptr { "*" } else { " " },
-                "[{:2}, bits {:2}] watermark {:8} available {}",
+                "[{:2}, bits {:2}] watermark {:8} available {} max_size_bytes {}, allocated_bytes: {} allocated_objects: {}",
                 ut.cptr,
                 info.sizeBits,
                 size - info.remainingBytes,
                 info.remainingBytes,
+                ut.free_bytes,
+                ut.allocated_bytes,
+                ut.allocated_objects
+                //l2tob(ut._size_bits),
+                //l2tob(ut._size_bits) - ut.free_bytes
             );
         }
+        info!("MemoryManager! : untypeds count static {}  {}", self.static_untypeds.len(), self._device_untypeds.len());
         if !self.static_untypeds.is_empty() {
             let cur_static_cptr = self.static_untypeds[self.cur_static_untyped].cptr;
             for ut in &self.static_untypeds {
