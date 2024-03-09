@@ -455,6 +455,9 @@ impl MemoryManagerInterface for MemoryManager {
             }
             allocated_objs += od.retype_count();
             allocated_bytes += od.size_bytes().unwrap();
+            // Update bookkeeping info for the modified slab
+            self.untypeds[ut_index].allocated_objects += od.retype_count();
+            self.untypeds[ut_index].allocated_bytes += od.size_bytes().unwrap();
         }
         self.cur_untyped = ut_index;
 
@@ -465,9 +468,6 @@ impl MemoryManagerInterface for MemoryManager {
         self.requested_objs += allocated_objs;
         self.requested_bytes += allocated_bytes;
 
-        // Update bookkeeping info for current slab
-        self.untypeds[ut_index].allocated_bytes += allocated_bytes;
-        self.untypeds[ut_index].allocated_objects += allocated_objs;
 
         Ok(())
     }
