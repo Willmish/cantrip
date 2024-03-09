@@ -348,20 +348,19 @@ impl MemoryManager {
     fn delete_caps(&mut self, root: seL4_CPtr, depth: u8, od: &ObjDesc) -> seL4_Result {
         for offset in 0..od.retype_count() {
             let path = (root, od.cptr + offset, depth as usize);
-            // TODO: @Willmish here unwrap the error, untypedSlabIndex and isLastReference to use for book keeping
             let result: seL4_CNode_Delete = delete_path(&path);
             if let Err(e) =  Into::<seL4_Result>::into(Into::<seL4_Error>::into(result.error as usize)) {
                 warn!("DELETE {:?} failed: od {:?} error {:?}", &path, od, e);
             }
-            info!("untypedSlabIndex: {} isLastReference {}", result.untypedSlabIndex, if result.isLastReference != 0 { "True" } else { "False" });
 
-            // TODO: update bookkeeping for correct slab, reset size if allocated_objects drops to 0
+            // Only update bookkeeping if this was the last reference and untypedSlabIndex is valid
             if result.isLastReference != 0 && result.untypedSlabIndex != 0 {
-                // TODO: @Willmish - to be replaced by a hashmap or a SmallVec with cptr -> self.untypeds mappign!
+                // TODO: @Willmish - to be replaced by a hashmap or a SmallVec with cptr -> self.untypeds mapping!
                 for i in 0..self.untypeds.len() {
                     if self.untypeds[i].cptr == result.untypedSlabIndex {
+                        // NOTE: decrementing by one at each CNode_Delete call, since objects could potentially span multiple CNodes.
+                        // This should never overflow, if object count is tracked properly
                         self.untypeds[i].allocated_objects -= 1;
-                        // NOTE: for now decrementing by one at each dealloc, since objects could potentially span multiple CNodes?
                         // check if object count dropped to 0
                         if self.untypeds[i].allocated_objects == 0 {
                             // reset the slab!
@@ -512,11 +511,8 @@ impl MemoryManagerInterface for MemoryManager {
         for ut in &self.untypeds {
             let info = untyped_describe(ut.cptr);
             let size = l2tob(info.sizeBits);
-            if info.sizeBits != ut._size_bits {
-                info!("AAAAA, info.sizeBits {:}, ut._size_bits {:}", info.sizeBits, ut._size_bits);
-            }
             info!(target: if ut.cptr == cur_cptr { "*" } else { " " },
-                "[{:2}, bits {:2}] watermark {:8} available {} max_size_bytes {}, allocated_bytes: {} allocated_objects: {}",
+                "[{:2}, bits {:2}] watermark {:8} available {}, max_size_bytes {}, allocated_bytes: {}, allocated_objects: {}",
                 ut.cptr,
                 info.sizeBits,
                 size - info.remainingBytes,
@@ -524,11 +520,8 @@ impl MemoryManagerInterface for MemoryManager {
                 ut.free_bytes,
                 ut.allocated_bytes,
                 ut.allocated_objects
-                //l2tob(ut._size_bits),
-                //l2tob(ut._size_bits) - ut.free_bytes
             );
         }
-        info!("MemoryManager! : untypeds count static {}  {}", self.static_untypeds.len(), self._device_untypeds.len());
         if !self.static_untypeds.is_empty() {
             let cur_static_cptr = self.static_untypeds[self.cur_static_untyped].cptr;
             for ut in &self.static_untypeds {
