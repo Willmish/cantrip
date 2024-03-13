@@ -402,6 +402,80 @@ impl MemoryManager {
 
         Ok(())
     }
+
+    fn alloc_best_fit(
+        &mut self,
+        bundle: &ObjDescBundle,
+        lifetime: MemoryLifetime,
+    ) -> Result<(), MemoryManagerError> {
+        //let first_ut = self.cur_untyped;
+        //let mut ut_index = first_ut;
+
+        let mut allocated_bytes: usize = 0;
+        let mut allocated_objs: usize = 0;
+
+        for od in &bundle.objs {
+            // Find slab which best fits the object - naively iterate through all
+            // First slab is best slab at the start
+            let mut best_slab_idx: usize = 0;
+            // compute first slabs left over bytes
+            let mut free_index = self.untypeds[best_slab_idx].allocated_bytes;
+            let mut new_slab_size: usize = Self::align_up(free_index, od.retype_size_bits().unwrap()) + od.size_bytes().unwrap();
+            let mut slab_bytes_after_alloc: usize = self.untypeds[best_slab_idx].free_bytes - new_slab_size;
+            // best_slabs left over bytes
+            let mut best_slab_bytes_after_alloc: usize = slab_bytes_after_alloc;
+            // Identify slab which will have the smallest number of bytes left over after alloc
+            for slab_idx in 1..self.untypeds.len() {
+                free_index = self.untypeds[slab_idx].allocated_bytes;
+                new_slab_size = Self::align_up(free_index, od.retype_size_bits().unwrap()) + od.size_bytes().unwrap();
+                // Only consider if enough space
+                if new_slab_size > self.untypeds[slab_idx].free_bytes {
+                    continue;
+                }
+                slab_bytes_after_alloc = self.untypeds[slab_idx].free_bytes - new_slab_size; 
+                if slab_bytes_after_alloc < best_slab_bytes_after_alloc {
+                    best_slab_idx = slab_idx;
+                    best_slab_bytes_after_alloc = slab_bytes_after_alloc;
+                }
+                // If perfect fit, break
+                if slab_bytes_after_alloc == 0 {
+                    break;
+                }
+            }
+
+            if let Err(e) = Self::retype_untyped(self.untypeds[best_slab_idx].cptr, bundle.cnode, od) {
+                if e != seL4_Error::seL4_NoError {
+                    if e != seL4_Error::seL4_NotEnoughMemory {
+                        // Should not happen.
+                        // TODO(sleffler): reclaim allocations
+                        error!("Allocation request failed (retype returned {:?})", e);
+                        return Err(MemoryManagerError::UnknownError);
+                    }
+                    // TODO(sleffler): reclaim allocations
+                    self.out_of_memory += 1;
+                    debug!("Allocation request failed (out of space)");
+                    return Err(MemoryManagerError::AllocFailed);
+                }
+            }
+            trace!("Allocated object in best slab: {:?}, wasting {:?} bytes of memory", best_slab_idx, best_slab_bytes_after_alloc);
+            allocated_objs += od.retype_count();
+            allocated_bytes += od.size_bytes().unwrap();
+            // Update bookkeeping info for the modified slab
+            self.untypeds[best_slab_idx].allocated_objects += od.retype_count();
+            self.untypeds[best_slab_idx].allocated_bytes = self.untypeds[best_slab_idx].free_bytes - best_slab_bytes_after_alloc;
+        }
+        //self.cur_untyped = best;
+
+        self.allocated_bytes += allocated_bytes;
+        self.allocated_objs += allocated_objs;
+
+        // NB: does not include requests that fail
+        self.requested_objs += allocated_objs;
+        self.requested_bytes += allocated_bytes;
+
+
+        Ok(())
+    }
 }
 
 impl MemoryManagerInterface for MemoryManager {
@@ -416,7 +490,10 @@ impl MemoryManagerInterface for MemoryManager {
             // Static allocations are handle separately.
             return self.alloc_static(bundle);
         }
-
+        let USE_BEST_FIT = true;
+        if USE_BEST_FIT {
+            return self.alloc_best_fit(bundle, lifetime)
+        }
         // TODO(sleffler): split by device vs no-device (or allow mixing)
         let first_ut = self.cur_untyped;
         let mut ut_index = first_ut;
@@ -542,6 +619,7 @@ impl MemoryManagerInterface for MemoryManager {
                 );
             }
         }
+        info!("Allocation failed on a slab: {} times. Out of memory thrown {} times.", self.untyped_slab_too_small, self.out_of_memory);
         Ok(())
     }
 }
