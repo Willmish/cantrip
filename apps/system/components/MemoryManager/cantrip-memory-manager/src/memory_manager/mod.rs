@@ -275,15 +275,16 @@ impl MemoryManager {
     pub fn untyped_slab_too_small(&self) -> usize { self.untyped_slab_too_small }
     pub fn out_of_memory(&self) -> usize { self.out_of_memory }
 
+    // Align |base_value| according to |alignment|. This mimics the
+    // alignUp logic the kernel uses for an Untyped_Retype operation.
+    fn align_up(base_value: seL4_Word, alignment: seL4_Word) -> seL4_Word {
+        fn bit(x: seL4_Word) -> seL4_Word { 1 << x }
+        fn mask(x: seL4_Word) -> seL4_Word { bit(x) - 1 }
+        (base_value + (bit(alignment) - 1)) & !mask(alignment)
+    }
+
     // Finds the largest slab with minimum mis-alignment (if any).
     fn find_best_slab(ut_cptr: seL4_CPtr, size_bits: usize) -> Option<usize> {
-        // Align |base_value| according to |alignment|. This mimics the
-        // alignUp logic the kernel uses for an Untyped_Retype operation.
-        fn align_up(base_value: seL4_Word, alignment: seL4_Word) -> seL4_Word {
-            fn bit(x: seL4_Word) -> seL4_Word { 1 << x }
-            fn mask(x: seL4_Word) -> seL4_Word { bit(x) - 1 }
-            (base_value + (bit(alignment) - 1)) & !mask(alignment)
-        }
         // NB: must use the current state to track each slab split
         let info = untyped_describe(ut_cptr);
         let alignment = info.remainingBytes - l2tob(size_bits);
@@ -294,7 +295,7 @@ impl MemoryManager {
             let slab_size = l2tob(bits);
             if slab_size <= alignment {
                 let free_index = l2tob(info.sizeBits) - info.remainingBytes;
-                let aligned_free_index = align_up(free_index, bits);
+                let aligned_free_index = Self::align_up(free_index, bits);
                 let mis_alignment = aligned_free_index - free_index;
                 if mis_alignment == 0 {
                     return Some(bits); // optimal
@@ -455,8 +456,13 @@ impl MemoryManagerInterface for MemoryManager {
             allocated_objs += od.retype_count();
             allocated_bytes += od.size_bytes().unwrap();
             // Update bookkeeping info for the modified slab
+            let free_index = self.untypeds[ut_index].allocated_bytes;//l2tob(info.sizeBits) - info.remainingBytes;
+            // TODO: @Willmish verify bit value correct:
+            let aligned_free_index = Self::align_up(free_index, od.retype_size_bits().unwrap());
             self.untypeds[ut_index].allocated_objects += od.retype_count();
-            self.untypeds[ut_index].allocated_bytes += od.size_bytes().unwrap();
+            self.untypeds[ut_index].allocated_bytes = aligned_free_index + od.size_bytes().unwrap();
+            // OLD method of purely accumulating allocated bytes (does not account for alignment - maybe worth tracking for fragmentation stats?)
+            //self.untypeds[ut_index].allocated_bytes += od.size_bytes().unwrap();
         }
         self.cur_untyped = ut_index;
 
