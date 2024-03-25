@@ -119,6 +119,18 @@ impl ObjDesc {
         }
     }
 
+    // Memory (in BIT-width) occupied by a SINGLE object. Used mainly for bookkeeping and statistics.
+    pub fn size_bits(&self) -> Option<usize> {
+        match self.type_ {
+            seL4_UntypedObject | seL4_SchedContextObject => Some(self.count),
+            // Note: CapTableObject true size in memory is bigger: https://github.com/seL4/seL4/blob/master/src/object/untyped.c#L291C1-L295C40
+            seL4_CapTableObject => self.type_.size_bits().map(|x| (x + self.count)),
+            _ => self.type_.size_bits().map(|x| x), // XXX: @Wilmish: possibly need to account for when self.count > 1? (bit width would increase? or is it enough to just know bit alignment of a single object)
+            // https://github.com/seL4/seL4/blob/master/src/object/untyped.c#L226 NodeWindow is number of objects, objectSize is single size object
+            //_ => self.type_.size_bits().map(|x| self.count * (1 << x)),
+        }
+    }
+
     // Memory occupied by objects. Used mainly for bookkeeping and statistics.
     pub fn size_bytes(&self) -> Option<usize> {
         match self.type_ {

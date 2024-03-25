@@ -420,14 +420,14 @@ impl MemoryManager {
             let mut best_slab_idx: usize = 0;
             // compute first slabs left over bytes
             let mut free_index = self.untypeds[best_slab_idx].allocated_bytes;
-            let mut new_slab_size: usize = Self::align_up(free_index, od.retype_size_bits().unwrap()) + od.size_bytes().unwrap();
+            let mut new_slab_size: usize = Self::align_up(free_index, od.size_bits().unwrap()) + od.size_bytes().unwrap();
             let mut slab_bytes_after_alloc: usize = self.untypeds[best_slab_idx].free_bytes - new_slab_size;
             // best_slabs left over bytes
             let mut best_slab_bytes_after_alloc: usize = slab_bytes_after_alloc;
             // Identify slab which will have the smallest number of bytes left over after alloc
             for slab_idx in 1..self.untypeds.len() {
                 free_index = self.untypeds[slab_idx].allocated_bytes;
-                new_slab_size = Self::align_up(free_index, od.retype_size_bits().unwrap()) + od.size_bytes().unwrap();
+                new_slab_size = Self::align_up(free_index, od.size_bits().unwrap()) + od.size_bytes().unwrap();
                 // Only consider if enough space
                 if new_slab_size > self.untypeds[slab_idx].free_bytes {
                     continue;
