@@ -55,7 +55,7 @@ component DebugConsole {
   // package that requires enough slots to hold dynamically allocated
   // memory for the package contents. Size this to handle up to 4MB
   // (at 4KB / page) though that exceeds our target memory config.
-//  attribute int cnode_headroom = 1024;
+  attribute int cnode_headroom = 1024;
 
   // Copyregions for zmodem upload and for loading bundle images.
   // Could do this with one region since upload never happens
