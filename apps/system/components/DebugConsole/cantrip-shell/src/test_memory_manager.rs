@@ -20,6 +20,7 @@ use crate::CmdFn;
 use crate::CommandError;
 use crate::HashMap;
 use alloc::vec;
+use alloc::vec::Vec;
 use core::fmt::Write;
 
 use cantrip_io as io;
@@ -37,9 +38,102 @@ pub fn add_cmds(cmds: &mut HashMap<&str, CmdFn>) {
         ("test_malloc", malloc_command as CmdFn),
         ("test_mfree", mfree_command as CmdFn),
         ("test_obj_alloc", obj_alloc_command as CmdFn),
+        ("synthetic_increasing_alloc", synthetic_increasing_allocs_cmd as CmdFn),
+        ("synthetic_decreasing_alloc", synthetic_decreasing_allocs_cmd as CmdFn),
     ]);
 }
 
+// commands for synthetic workloads
+fn synthetic_increasing_allocs_cmd(
+    args: &mut dyn Iterator<Item = &str>,
+    _input: &mut dyn io::BufRead,
+    output: &mut dyn io::Write,
+) -> Result<(), CommandError> {
+    // TODO: make this optional?
+    let max_alloc_num_str = args.next().ok_or(CommandError::BadArgs)?;
+    let max_alloc_num = max_alloc_num_str.parse::<usize>()?;
+    let mut space_bytes = 4096;
+    // Max 50 pages at once
+    //let max_space_bytes = 50 * 4096;
+    // step
+    let step = 4096;
+    // max num of allocs (35 limit for best alloc)
+    //let max_alloc_num = 35;
+    // Keep track of all succesful mallocs
+    let mut succesful_allocs = Vec::with_capacity(max_alloc_num);
+    for _ in 0..max_alloc_num {
+        match cantrip_frame_alloc(space_bytes) {
+            Ok(frames) => {
+                // pushobjDescBundle
+                succesful_allocs.push(frames.clone());
+                writeln!(output, "Allocated {:?}", frames)?;
+            }
+            Err(status) => {
+                writeln!(output, "malloc failed: {:?}", status)?;
+            }
+        }
+        space_bytes += step;
+    }
+    // TODO: maybe call mdebug and try to free, trac kall previous?
+    // Print Mdebug
+    if let Err(status) = cantrip_memory_debug() {
+        writeln!(output, "stats failed: {:?}", status)?;
+    }
+    // Free all objects that were succesful
+    for obj in succesful_allocs {
+        match cantrip_object_free_toplevel(&obj) {
+            Ok(_) => {
+                writeln!(output, "Free'd {:?}", obj)?;
+            }
+            Err(status) => {
+                writeln!(output, "mfree failed: {:?}", status)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn synthetic_decreasing_allocs_cmd(
+    args: &mut dyn Iterator<Item = &str>,
+    _input: &mut dyn io::BufRead,
+    output: &mut dyn io::Write,
+) -> Result<(), CommandError> {
+    let max_alloc_num_str = args.next().ok_or(CommandError::BadArgs)?;
+    let max_alloc_num = max_alloc_num_str.parse::<usize>()?;
+    let mut space_bytes = max_alloc_num * 4096;
+    // step
+    let step = 4096;
+    // Keep track of all succesful mallocs
+    let mut succesful_allocs = Vec::with_capacity(max_alloc_num);
+    for _ in 0..max_alloc_num {
+        match cantrip_frame_alloc(space_bytes) {
+            Ok(frames) => {
+                succesful_allocs.push(frames.clone());
+                writeln!(output, "Allocated {:?}", frames)?;
+            }
+            Err(status) => {
+                writeln!(output, "malloc failed: {:?}", status)?;
+            }
+        }
+        space_bytes -= step;
+    }
+    // Print Mdebug
+    if let Err(status) = cantrip_memory_debug() {
+        writeln!(output, "stats failed: {:?}", status)?;
+    }
+    // Free all objects that were succesful
+    for obj in succesful_allocs {
+        match cantrip_object_free_toplevel(&obj) {
+            Ok(_) => {
+                writeln!(output, "Free'd {:?}", obj)?;
+            }
+            Err(status) => {
+                writeln!(output, "mfree failed: {:?}", status)?;
+            }
+        }
+    }
+    Ok(())
+}
 fn malloc_command(
     args: &mut dyn Iterator<Item = &str>,
     _input: &mut dyn io::BufRead,

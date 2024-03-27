@@ -53,7 +53,8 @@ mod dynamic_load;
 mod fringe_cmds;
 #[cfg(all(feature = "CONFIG_DEBUG_BUILD", feature = "TEST_GLOBAL_ALLOCATOR"))]
 mod test_global_allocator;
-#[cfg(all(feature = "CONFIG_DEBUG_BUILD", feature = "TEST_MEMORY_MANAGER"))]
+//#[cfg(all(feature = "CONFIG_DEBUG_BUILD", feature = "TEST_MEMORY_MANAGER"))]
+#[cfg(feature = "TEST_MEMORY_MANAGER")]
 mod test_memory_manager;
 #[cfg(all(
     feature = "ml_support",
@@ -150,7 +151,8 @@ fn get_cmds() -> HashMap<&'static str, CmdFn> {
     fringe_cmds::add_cmds(&mut cmds);
     #[cfg(all(feature = "CONFIG_DEBUG_BUILD", feature = "TEST_GLOBAL_ALLOCATOR"))]
     test_global_allocator::add_cmds(&mut cmds);
-    #[cfg(all(feature = "CONFIG_DEBUG_BUILD", feature = "TEST_MEMORY_MANAGER"))]
+    //#[cfg(all(feature = "CONFIG_DEBUG_BUILD", feature = "TEST_MEMORY_MANAGER"))]
+    #[cfg(feature = "TEST_MEMORY_MANAGER")]
     test_memory_manager::add_cmds(&mut cmds);
     #[cfg(all(
         feature = "ml_support",
