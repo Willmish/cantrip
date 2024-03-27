@@ -15,6 +15,7 @@
 //! MemoryManager service shell test commands
 
 extern crate alloc;
+extern crate rand;
 use crate::mstats;
 use crate::CmdFn;
 use crate::CommandError;
@@ -22,6 +23,8 @@ use crate::HashMap;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt::Write;
+use rand::{Rng, SeedableRng};
+use rand::rngs::SmallRng;
 
 use cantrip_io as io;
 use cantrip_memory_interface::*;
@@ -40,8 +43,10 @@ pub fn add_cmds(cmds: &mut HashMap<&str, CmdFn>) {
         ("test_obj_alloc", obj_alloc_command as CmdFn),
         ("synthetic_increasing_alloc", synthetic_increasing_allocs_cmd as CmdFn),
         ("synthetic_decreasing_alloc", synthetic_decreasing_allocs_cmd as CmdFn),
+        ("synthetic_random_alloc", synthetic_random_allocs_cmd as CmdFn),
     ]);
 }
+
 
 // commands for synthetic workloads
 fn synthetic_increasing_allocs_cmd(
@@ -116,6 +121,58 @@ fn synthetic_decreasing_allocs_cmd(
             }
         }
         space_bytes -= step;
+    }
+    // Print Mdebug
+    if let Err(status) = cantrip_memory_debug() {
+        writeln!(output, "stats failed: {:?}", status)?;
+    }
+    // Free all objects that were succesful
+    for obj in succesful_allocs {
+        match cantrip_object_free_toplevel(&obj) {
+            Ok(_) => {
+                writeln!(output, "Free'd {:?}", obj)?;
+            }
+            Err(status) => {
+                writeln!(output, "mfree failed: {:?}", status)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn synthetic_random_allocs_cmd(
+    args: &mut dyn Iterator<Item = &str>,
+    _input: &mut dyn io::BufRead,
+    output: &mut dyn io::Write,
+) -> Result<(), CommandError> {
+    // Expects input: Seed, number of elements
+    let seed_str  = args.next().ok_or(CommandError::BadArgs)?;
+    let seed = seed_str.parse::<usize>()? as u64;
+    let max_alloc_num_str = args.next().ok_or(CommandError::BadArgs)?;
+    let max_alloc_num = max_alloc_num_str.parse::<usize>()?;
+    let mut space_bytes = 0;
+    let min_alloc_size = 1;
+    // At most 30 pages in one go!
+    let max_alloc_size = 30;
+    // random generator
+    // XXX: need to fix seeding from entropy
+    //let mut rng = SmallRng::from_entropy();
+    // For now, seeding from integer ! (default 42)
+    let mut rng = SmallRng::seed_from_u64(seed);
+    // Keep track of all succesful mallocs
+    let mut succesful_allocs = Vec::with_capacity(max_alloc_num);
+    for _ in 0..max_alloc_num {
+        // XXX: possibly use Uniform and sample all values at once: https://docs.rs/rand/latest/rand/distributions/struct.Uniform.html
+        space_bytes = 4096 * rng.gen_range(min_alloc_size..=max_alloc_size);
+        match cantrip_frame_alloc(space_bytes) {
+            Ok(frames) => {
+                succesful_allocs.push(frames.clone());
+                writeln!(output, "Allocated {:?}", frames)?;
+            }
+            Err(status) => {
+                writeln!(output, "malloc failed: {:?}", status)?;
+            }
+        }
     }
     // Print Mdebug
     if let Err(status) = cantrip_memory_debug() {

@@ -79,3 +79,6 @@ cantrip-timer-interface = { path = "../../TimerService/cantrip-timer-interface" 
 cantrip-sdk-manager = { path = "../../SDKRuntime/cantrip-sdk-manager" }
 log = { version = "0.4", features = ["release_max_level_info"] }
 zmodem = { path = "../zmodem", optional = true }
+rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }
+# rand added for TEST_MEMORY_MANAGER
+#rand = "0.3.15"
