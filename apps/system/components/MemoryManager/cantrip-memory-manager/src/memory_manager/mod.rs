@@ -414,20 +414,37 @@ impl MemoryManager {
         let mut allocated_bytes: usize = 0;
         let mut allocated_objs: usize = 0;
 
+        //fn align_up(base_value: seL4_Word, alignment: seL4_Word) -> seL4_Word {
+        //    fn bit(x: seL4_Word) -> seL4_Word { 1 << x }
+        //    fn mask(x: seL4_Word) -> seL4_Word { bit(x) - 1 }
+        //    (base_value + (bit(alignment) - 1)) & !mask(alignment)
+        //}
+        fn get_single_object_size(od: &ObjDesc) -> Option<usize> {
+            // Gets the size for a single object of a particular type.
+            // This is necessary to get the per-object alignment right
+            od.size_bytes().map(|x| x / od.retype_count())
+        }
+        fn align_up_bytes(base_value: seL4_Word, alignment_bytes: seL4_Word) -> seL4_Word {
+            // Get the object alignemnt based on its size in bytes
+            (base_value + alignment_bytes - 1) & !(alignment_bytes - 1)
+        }
+
         for od in &bundle.objs {
             // Find slab which best fits the object - naively iterate through all
             // First slab is best slab at the start
             let mut best_slab_idx: usize = 0;
             // compute first slabs left over bytes
             let mut free_index = self.untypeds[best_slab_idx].allocated_bytes;
-            let mut new_slab_size: usize = Self::align_up(free_index, od.size_bits().unwrap()) + od.size_bytes().unwrap();
+            let mut new_slab_size: usize = align_up_bytes(free_index, get_single_object_size(od).unwrap()) + od.size_bytes().unwrap();
+            //let mut new_slab_size: usize = Self::align_up(free_index, od.size_bits().unwrap()) + od.size_bytes().unwrap();
             let mut slab_bytes_after_alloc: usize = self.untypeds[best_slab_idx].free_bytes - new_slab_size;
             // best_slabs left over bytes
             let mut best_slab_bytes_after_alloc: usize = slab_bytes_after_alloc;
             // Identify slab which will have the smallest number of bytes left over after alloc
             for slab_idx in 1..self.untypeds.len() {
                 free_index = self.untypeds[slab_idx].allocated_bytes;
-                new_slab_size = Self::align_up(free_index, od.size_bits().unwrap()) + od.size_bytes().unwrap();
+                //new_slab_size = Self::align_up(free_index, od.size_bits().unwrap()) + od.size_bytes().unwrap();
+                new_slab_size = align_up_bytes(free_index, get_single_object_size(od).unwrap()) + od.size_bytes().unwrap();
                 // Only consider if enough space
                 if new_slab_size > self.untypeds[slab_idx].free_bytes {
                     continue;
